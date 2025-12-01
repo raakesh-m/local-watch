@@ -19,10 +19,12 @@ function createWindow(): void {
     backgroundColor: '#1a1a1a',
   });
 
+  // Load the index.html file
+  // __dirname will be in dist folder, so renderer is ../renderer
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
   // Open DevTools in development
-  if (process.env.NODE_ENV === 'development') {
+  if (!app.isPackaged || process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools();
   }
 

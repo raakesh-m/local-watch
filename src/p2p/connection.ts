@@ -32,6 +32,7 @@ export class P2PConnection {
   private onMessageCallback: ((message: SyncMessage) => void) | null = null;
   private onStatusCallback: ((status: ConnectionStatus) => void) | null = null;
   private connectedPeers: Map<string, SimplePeer.Instance> = new Map();
+  private signalData: string | null = null;
 
   constructor(isHost: boolean) {
     this.isHost = isHost;
@@ -55,10 +56,9 @@ export class P2PConnection {
         this.setupPeerListeners(this.peer);
 
         this.peer.on('signal', (signal) => {
-          // In a real implementation, you'd send this signal to a signaling server
-          // For now, we'll store it and let the user share it
-          const signalData = JSON.stringify(signal);
-          console.log('Host signal data:', signalData);
+          // Store the signal data for later retrieval
+          this.signalData = JSON.stringify(signal);
+          console.log('Host signal data generated');
           resolve(this.roomCode!);
         });
 
@@ -92,9 +92,9 @@ export class P2PConnection {
         this.setupPeerListeners(this.peer);
 
         this.peer.on('signal', (signal) => {
-          // Guest generates their signal and needs to send back to host
-          const signalData = JSON.stringify(signal);
-          console.log('Guest signal data:', signalData);
+          // Store guest signal data for later retrieval
+          this.signalData = JSON.stringify(signal);
+          console.log('Guest signal data generated');
         });
 
         this.peer.on('connect', () => {
@@ -252,7 +252,7 @@ export class P2PConnection {
   }
 
   /**
-   * Get host signal for sharing
+   * Get signal data for sharing
    */
   getSignalData(): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -261,14 +261,24 @@ export class P2PConnection {
         return;
       }
 
+      // If signal data is already captured, return it immediately
+      if (this.signalData) {
+        resolve(this.signalData);
+        return;
+      }
+
+      // Otherwise wait for signal with timeout
       const timeout = setTimeout(() => {
         reject(new Error('Signal generation timeout'));
       }, 10000);
 
-      this.peer.on('signal', (signal) => {
+      const signalHandler = (signal: SimplePeer.SignalData) => {
         clearTimeout(timeout);
-        resolve(JSON.stringify(signal));
-      });
+        this.signalData = JSON.stringify(signal);
+        resolve(this.signalData);
+      };
+
+      this.peer.on('signal', signalHandler);
     });
   }
 
@@ -293,6 +303,7 @@ export class P2PConnection {
     });
     this.connectedPeers.clear();
 
+    this.signalData = null;
     this.updateStatus('disconnected');
   }
 }
