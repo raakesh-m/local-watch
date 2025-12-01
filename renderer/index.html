@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LocalWatch</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Home Screen -->
+      <div id="home-screen" class="screen active">
+        <div class="container">
+          <h1 class="logo">LocalWatch</h1>
+          <p class="tagline">Watch local videos together, peer-to-peer</p>
+
+          <div class="button-group">
+            <button id="create-room-btn" class="btn btn-primary">
+              Create Room
+            </button>
+            <button id="join-room-btn" class="btn btn-secondary">
+              Join Room
+            </button>
+          </div>
+
+          <div class="info-box">
+            <p>
+              <strong>How it works:</strong> Create a room to host, or join
+              with a code. Everyone loads the same video file locally, and
+              playback stays in perfect sync.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Create Room Screen -->
+      <div id="create-room-screen" class="screen">
+        <div class="container">
+          <button class="back-btn" id="create-back-btn">&larr; Back</button>
+
+          <h2>Create Room</h2>
+
+          <div class="step">
+            <h3>Step 1: Select your video file</h3>
+            <button id="select-video-btn" class="btn btn-secondary">
+              Choose Video File
+            </button>
+            <div id="video-selected" class="status-message"></div>
+          </div>
+
+          <div class="step" id="room-code-section" style="display: none">
+            <h3>Step 2: Share room code with friends</h3>
+            <div class="room-code-display">
+              <div class="room-code" id="room-code">------</div>
+              <button id="copy-code-btn" class="btn btn-small">Copy</button>
+            </div>
+            <p class="help-text">
+              Your friends need to enter this code to join your room
+            </p>
+
+            <div class="signal-exchange">
+              <h4>Connection Setup</h4>
+              <p class="help-text">
+                Copy your signal data and send it to your friend:
+              </p>
+              <textarea
+                id="host-signal-output"
+                class="signal-box"
+                readonly
+                placeholder="Generating signal..."
+              ></textarea>
+              <button id="copy-signal-btn" class="btn btn-small">
+                Copy Signal
+              </button>
+
+              <p class="help-text" style="margin-top: 20px">
+                Paste your friend's signal data here:
+              </p>
+              <textarea
+                id="guest-signal-input"
+                class="signal-box"
+                placeholder="Paste guest signal here..."
+              ></textarea>
+              <button id="connect-guest-btn" class="btn btn-primary">
+                Connect Guest
+              </button>
+            </div>
+          </div>
+
+          <div class="step" id="waiting-section" style="display: none">
+            <h3>Waiting for guests...</h3>
+            <div class="status-message">
+              <div class="loading-spinner"></div>
+              <p>Connected: <span id="connected-count">0</span> guests</p>
+            </div>
+            <button id="start-watching-btn" class="btn btn-primary">
+              Start Watching
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Join Room Screen -->
+      <div id="join-room-screen" class="screen">
+        <div class="container">
+          <button class="back-btn" id="join-back-btn">&larr; Back</button>
+
+          <h2>Join Room</h2>
+
+          <div class="step">
+            <h3>Step 1: Enter room code</h3>
+            <input
+              type="text"
+              id="room-code-input"
+              class="room-code-input"
+              placeholder="XXXXXX"
+              maxlength="6"
+            />
+          </div>
+
+          <div class="step">
+            <h3>Step 2: Select your video file</h3>
+            <button id="join-select-video-btn" class="btn btn-secondary">
+              Choose Video File
+            </button>
+            <div id="join-video-selected" class="status-message"></div>
+          </div>
+
+          <div class="step">
+            <h3>Step 3: Exchange connection data</h3>
+            <p class="help-text">Paste the host's signal data here:</p>
+            <textarea
+              id="host-signal-input"
+              class="signal-box"
+              placeholder="Paste host signal here..."
+            ></textarea>
+
+            <p class="help-text" style="margin-top: 20px">
+              Copy your signal and send it to the host:
+            </p>
+            <textarea
+              id="guest-signal-output"
+              class="signal-box"
+              readonly
+              placeholder="Your signal will appear here..."
+            ></textarea>
+            <button id="copy-guest-signal-btn" class="btn btn-small">
+              Copy Signal
+            </button>
+          </div>
+
+          <button id="join-room-connect-btn" class="btn btn-primary">
+            Connect to Room
+          </button>
+
+          <div id="join-status" class="status-message"></div>
+        </div>
+      </div>
+
+      <!-- Player Screen -->
+      <div id="player-screen" class="screen">
+        <button class="exit-btn" id="exit-player-btn">Exit Room</button>
+
+        <div class="player-container">
+          <video id="video-player" class="video-player"></video>
+
+          <div class="player-controls">
+            <button id="play-pause-btn" class="control-btn">▶</button>
+            <input
+              type="range"
+              id="seek-bar"
+              class="seek-bar"
+              min="0"
+              max="100"
+              value="0"
+            />
+            <span id="time-display" class="time-display">0:00 / 0:00</span>
+            <button id="fullscreen-btn" class="control-btn">⛶</button>
+          </div>
+        </div>
+
+        <div class="status-bar">
+          <span class="status-indicator">
+            <span id="connection-status" class="status-dot"></span>
+            <span id="connection-text">Connecting...</span>
+          </span>
+          <span id="room-code-display"></span>
+        </div>
+      </div>
+
+      <!-- Error Modal -->
+      <div id="error-modal" class="modal">
+        <div class="modal-content">
+          <h3>Error</h3>
+          <p id="error-message"></p>
+          <button id="error-ok-btn" class="btn btn-primary">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

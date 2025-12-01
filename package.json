@@ -1,0 +1,76 @@
+{
+  "name": "localwatch",
+  "version": "1.0.0",
+  "description": "Cross-platform P2P synchronized local video watching without servers",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "concurrently \"tsc -w\" \"webpack --watch --mode development\" \"electron-forge start\"",
+    "build": "tsc && webpack --mode production",
+    "start": "electron-forge start",
+    "package": "npm run build && electron-forge package",
+    "make": "npm run build && electron-forge make",
+    "lint": "eslint src --ext .ts",
+    "test": "jest"
+  },
+  "keywords": [
+    "electron",
+    "webrtc",
+    "p2p",
+    "video",
+    "sync"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@electron-forge/cli": "^7.2.0",
+    "@electron-forge/maker-deb": "^7.2.0",
+    "@electron-forge/maker-dmg": "^7.2.0",
+    "@electron-forge/maker-squirrel": "^7.2.0",
+    "@electron-forge/maker-zip": "^7.2.0",
+    "@types/node": "^20.10.0",
+    "@types/simple-peer": "^9.11.8",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0",
+    "eslint": "^8.54.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.2",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "simple-peer": "^9.11.1"
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+        "name": "LocalWatch",
+        "executableName": "localwatch",
+        "icon": "./assets/icon",
+        "asar": true
+      },
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "localwatch"
+          }
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin"
+          ]
+        },
+        {
+          "name": "@electron-forge/maker-dmg",
+          "config": {
+            "format": "ULFO",
+            "name": "LocalWatch"
+          }
+        }
+      ]
+    }
+  }
+}
