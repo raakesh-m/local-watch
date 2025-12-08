@@ -1,26 +1,41 @@
-import { P2PConnection, SyncMessage } from '../p2p/connection';
+import { MeshNetwork, SyncMessage } from '../p2p/meshNetwork';
 
 export interface VideoState {
   isPlaying: boolean;
   position: number;
   timestamp: number;
+  playbackRate: number;
 }
 
 export class SyncManager {
-  private connection: P2PConnection;
-  private isHost: boolean;
+  private network: MeshNetwork;
   private videoElement: HTMLVideoElement | null = null;
   private syncInterval: NodeJS.Timeout | null = null;
   private onStateUpdateCallback: ((state: VideoState) => void) | null = null;
+  private onBufferingChangeCallback: ((isBuffering: boolean, peerId?: string) => void) | null = null;
   private videoDuration: number = 0;
   private lastSyncTime: number = 0;
-  private driftThreshold = 0.3; // 300ms
-  private hardSeekThreshold = 0.7; // 700ms
-  private syncIntervalMs = 500; // Send sync every 500ms
+  private isLocalAction: boolean = false;
 
-  constructor(connection: P2PConnection, isHost: boolean) {
-    this.connection = connection;
-    this.isHost = isHost;
+  // Sync tuning parameters
+  private driftThreshold = 0.3; // 300ms - no correction needed
+  private softCorrectionThreshold = 0.7; // 700ms - adjust playback rate
+  private hardSeekThreshold = 2.0; // 2s - hard seek
+  private baseSyncIntervalMs = 500;
+  private adaptiveSyncIntervalMs = 500;
+  private maxSyncIntervalMs = 2000;
+  private minSyncIntervalMs = 200;
+
+  // Network latency tracking
+  private latencyBuffer: number[] = [];
+  private averageLatency: number = 0;
+
+  // Buffering coordination
+  private peersBuffering: Set<string> = new Set();
+  private wasPlayingBeforeBuffer: boolean = false;
+
+  constructor(network: MeshNetwork) {
+    this.network = network;
     this.setupMessageHandler();
   }
 
@@ -29,13 +44,12 @@ export class SyncManager {
    */
   setVideoElement(videoElement: HTMLVideoElement): void {
     this.videoElement = videoElement;
-    this.videoDuration = videoElement.duration;
+    this.videoDuration = videoElement.duration || 0;
 
-    // Setup video event listeners
     this.setupVideoListeners();
 
-    // Start sync loop if host
-    if (this.isHost) {
+    // Start sync loop if we're the leader
+    if (this.network.isLeader()) {
       this.startSyncLoop();
     }
   }
@@ -47,15 +61,21 @@ export class SyncManager {
     if (!this.videoElement) return;
 
     this.videoElement.addEventListener('play', () => {
-      this.handleLocalPlay();
+      if (!this.isLocalAction) {
+        this.handleLocalPlay();
+      }
     });
 
     this.videoElement.addEventListener('pause', () => {
-      this.handleLocalPause();
+      if (!this.isLocalAction) {
+        this.handleLocalPause();
+      }
     });
 
     this.videoElement.addEventListener('seeked', () => {
-      this.handleLocalSeek();
+      if (!this.isLocalAction) {
+        this.handleLocalSeek();
+      }
     });
 
     this.videoElement.addEventListener('loadedmetadata', () => {
@@ -63,6 +83,23 @@ export class SyncManager {
         this.videoDuration = this.videoElement.duration;
         console.log('Video duration:', this.videoDuration);
       }
+    });
+
+    this.videoElement.addEventListener('waiting', () => {
+      this.handleLocalBuffering(true);
+    });
+
+    this.videoElement.addEventListener('playing', () => {
+      this.handleLocalBuffering(false);
+    });
+
+    this.videoElement.addEventListener('canplay', () => {
+      this.handleLocalBuffering(false);
+    });
+
+    this.videoElement.addEventListener('ratechange', () => {
+      // Track playback rate changes for debugging
+      console.log('Playback rate changed to:', this.videoElement?.playbackRate);
     });
   }
 
@@ -72,6 +109,9 @@ export class SyncManager {
   private handleLocalPlay(): void {
     if (!this.videoElement) return;
 
+    // If we're buffering, don't send play
+    if (this.peersBuffering.size > 0) return;
+
     const message: SyncMessage = {
       type: 'play',
       isPlaying: true,
@@ -79,11 +119,8 @@ export class SyncManager {
       timestamp: Date.now(),
     };
 
-    if (this.isHost) {
-      this.connection.broadcast(message);
-    } else {
-      this.connection.sendMessage(message);
-    }
+    this.network.broadcast(message);
+    this.updateAdaptiveSync(true); // Faster sync when playing
   }
 
   /**
@@ -99,11 +136,8 @@ export class SyncManager {
       timestamp: Date.now(),
     };
 
-    if (this.isHost) {
-      this.connection.broadcast(message);
-    } else {
-      this.connection.sendMessage(message);
-    }
+    this.network.broadcast(message);
+    this.updateAdaptiveSync(false); // Slower sync when paused
   }
 
   /**
@@ -119,10 +153,26 @@ export class SyncManager {
       timestamp: Date.now(),
     };
 
-    if (this.isHost) {
-      this.connection.broadcast(message);
-    } else {
-      this.connection.sendMessage(message);
+    this.network.broadcast(message);
+  }
+
+  /**
+   * Handle local buffering state
+   */
+  private handleLocalBuffering(isBuffering: boolean): void {
+    if (!this.videoElement) return;
+
+    const message: SyncMessage = {
+      type: 'buffering',
+      isBuffering,
+      senderId: this.network.getLocalId(),
+      position: this.videoElement.currentTime,
+    };
+
+    this.network.broadcast(message);
+
+    if (this.onBufferingChangeCallback) {
+      this.onBufferingChangeCallback(isBuffering);
     }
   }
 
@@ -130,15 +180,26 @@ export class SyncManager {
    * Setup message handler for incoming sync messages
    */
   private setupMessageHandler(): void {
-    this.connection.onMessage((message: SyncMessage) => {
-      this.handleSyncMessage(message);
+    this.network.onMessage((message: SyncMessage, senderId: string) => {
+      this.handleSyncMessage(message, senderId);
+    });
+
+    // Listen for leader changes
+    this.network.onLeaderChange((leaderId: string) => {
+      if (leaderId === this.network.getLocalId()) {
+        // We became the leader, start sync loop
+        this.startSyncLoop();
+      } else {
+        // We're not the leader anymore, stop sync loop
+        this.stopSyncLoop();
+      }
     });
   }
 
   /**
    * Handle incoming sync message
    */
-  private handleSyncMessage(message: SyncMessage): void {
+  private handleSyncMessage(message: SyncMessage, senderId: string): void {
     if (!this.videoElement) return;
 
     switch (message.type) {
@@ -154,13 +215,12 @@ export class SyncManager {
       case 'sync':
         this.applySync(message);
         break;
-      case 'ready':
-        console.log('Peer ready:', message.userId);
+      case 'buffering':
+        this.handlePeerBuffering(senderId, message.isBuffering || false);
         break;
-      case 'join':
-        console.log('Peer joined:', message.userId);
-        // If we're the host, send current state
-        if (this.isHost) {
+      case 'ready':
+        console.log('Peer ready:', senderId);
+        if (this.network.isLeader()) {
           this.sendCurrentState();
         }
         break;
@@ -172,6 +232,8 @@ export class SyncManager {
    */
   private async applyPlay(message: SyncMessage): Promise<void> {
     if (!this.videoElement || message.position === undefined) return;
+
+    this.isLocalAction = true;
 
     // Sync position first
     const drift = Math.abs(this.videoElement.currentTime - message.position);
@@ -187,6 +249,9 @@ export class SyncManager {
         console.error('Error playing video:', error);
       }
     }
+
+    this.isLocalAction = false;
+    this.updateAdaptiveSync(true);
   }
 
   /**
@@ -194,6 +259,8 @@ export class SyncManager {
    */
   private applyPause(message: SyncMessage): void {
     if (!this.videoElement || message.position === undefined) return;
+
+    this.isLocalAction = true;
 
     // Sync position
     const drift = Math.abs(this.videoElement.currentTime - message.position);
@@ -205,6 +272,9 @@ export class SyncManager {
     if (!this.videoElement.paused) {
       this.videoElement.pause();
     }
+
+    this.isLocalAction = false;
+    this.updateAdaptiveSync(false);
   }
 
   /**
@@ -212,6 +282,8 @@ export class SyncManager {
    */
   private applySeek(message: SyncMessage): void {
     if (!this.videoElement || message.position === undefined) return;
+
+    this.isLocalAction = true;
 
     this.videoElement.currentTime = message.position;
 
@@ -222,10 +294,12 @@ export class SyncManager {
     } else if (!message.isPlaying && !this.videoElement.paused) {
       this.videoElement.pause();
     }
+
+    this.isLocalAction = false;
   }
 
   /**
-   * Apply sync update (drift correction)
+   * Apply sync update (drift correction) - improved algorithm
    */
   private applySync(message: SyncMessage): void {
     if (
@@ -244,68 +318,165 @@ export class SyncManager {
     }
     this.lastSyncTime = now;
 
-    // Calculate expected position based on elapsed time since message
-    const elapsed = (now - message.timestamp) / 1000;
+    // Track network latency
+    const latency = now - message.timestamp;
+    this.updateLatencyEstimate(latency);
+
+    // Calculate expected position accounting for network latency
+    const elapsed = (latency + this.averageLatency / 2) / 1000;
     const expectedPosition = message.isPlaying
       ? message.position + elapsed
       : message.position;
 
     // Calculate drift
-    const drift = Math.abs(this.videoElement.currentTime - expectedPosition);
+    const drift = this.videoElement.currentTime - expectedPosition;
+    const absDrift = Math.abs(drift);
 
-    if (drift < this.driftThreshold) {
+    if (absDrift < this.driftThreshold) {
       // Small drift - no correction needed
+      this.videoElement.playbackRate = 1.0;
       return;
-    } else if (drift < this.hardSeekThreshold) {
-      // Medium drift - micro-adjust playback rate
-      if (message.isPlaying) {
-        const adjustment = drift > 0.5 ? 0.05 : 0.02;
-        this.videoElement.playbackRate =
-          this.videoElement.currentTime < expectedPosition
-            ? 1.0 + adjustment
-            : 1.0 - adjustment;
+    }
 
-        // Reset to normal speed after a short time
-        setTimeout(() => {
-          if (this.videoElement) {
-            this.videoElement.playbackRate = 1.0;
-          }
-        }, 1000);
-      }
-    } else {
+    this.isLocalAction = true;
+
+    if (absDrift > this.hardSeekThreshold) {
       // Large drift - hard seek
-      console.log(
-        `Large drift detected (${drift.toFixed(2)}s), hard seeking`
-      );
+      console.log(`Large drift (${absDrift.toFixed(2)}s), hard seeking`);
       this.videoElement.currentTime = expectedPosition;
+      this.videoElement.playbackRate = 1.0;
+    } else if (absDrift > this.softCorrectionThreshold) {
+      // Medium-large drift - faster rate adjustment
+      const adjustment = drift > 0 ? -0.08 : 0.08;
+      this.videoElement.playbackRate = 1.0 + adjustment;
+
+      // Reset to normal speed after catching up
+      setTimeout(() => {
+        if (this.videoElement) {
+          this.videoElement.playbackRate = 1.0;
+        }
+      }, 1500);
+    } else {
+      // Small-medium drift - gentle rate adjustment
+      const adjustment = drift > 0 ? -0.03 : 0.03;
+      this.videoElement.playbackRate = 1.0 + adjustment;
+
+      // Reset to normal speed
+      setTimeout(() => {
+        if (this.videoElement) {
+          this.videoElement.playbackRate = 1.0;
+        }
+      }, 1000);
     }
 
     // Sync play/pause state
     if (message.isPlaying && this.videoElement.paused) {
-      this.videoElement.play().catch((error) => {
-        console.error('Error playing during sync:', error);
-      });
+      this.videoElement.play().catch(console.error);
     } else if (!message.isPlaying && !this.videoElement.paused) {
       this.videoElement.pause();
+    }
+
+    this.isLocalAction = false;
+  }
+
+  /**
+   * Handle peer buffering state
+   */
+  private handlePeerBuffering(peerId: string, isBuffering: boolean): void {
+    if (isBuffering) {
+      // Peer started buffering
+      if (this.peersBuffering.size === 0 && this.videoElement && !this.videoElement.paused) {
+        this.wasPlayingBeforeBuffer = true;
+        this.isLocalAction = true;
+        this.videoElement.pause();
+        this.isLocalAction = false;
+      }
+      this.peersBuffering.add(peerId);
+    } else {
+      // Peer stopped buffering
+      this.peersBuffering.delete(peerId);
+
+      if (this.peersBuffering.size === 0 && this.wasPlayingBeforeBuffer && this.videoElement) {
+        this.wasPlayingBeforeBuffer = false;
+        this.isLocalAction = true;
+        this.videoElement.play().catch(console.error);
+        this.isLocalAction = false;
+      }
+    }
+
+    if (this.onBufferingChangeCallback) {
+      this.onBufferingChangeCallback(isBuffering, peerId);
     }
   }
 
   /**
-   * Start sync loop (host only)
+   * Update network latency estimate
+   */
+  private updateLatencyEstimate(latency: number): void {
+    this.latencyBuffer.push(latency);
+    if (this.latencyBuffer.length > 10) {
+      this.latencyBuffer.shift();
+    }
+
+    // Calculate average, excluding outliers
+    const sorted = [...this.latencyBuffer].sort((a, b) => a - b);
+    const trimmed = sorted.slice(1, -1);
+    this.averageLatency = trimmed.length > 0
+      ? trimmed.reduce((a, b) => a + b, 0) / trimmed.length
+      : latency;
+  }
+
+  /**
+   * Update adaptive sync interval based on playback state
+   */
+  private updateAdaptiveSync(isPlaying: boolean): void {
+    if (isPlaying) {
+      // Faster sync when playing
+      this.adaptiveSyncIntervalMs = Math.max(
+        this.minSyncIntervalMs,
+        this.baseSyncIntervalMs / 2
+      );
+    } else {
+      // Slower sync when paused (save resources)
+      this.adaptiveSyncIntervalMs = Math.min(
+        this.maxSyncIntervalMs,
+        this.baseSyncIntervalMs * 2
+      );
+    }
+
+    // Restart sync loop with new interval
+    if (this.network.isLeader()) {
+      this.stopSyncLoop();
+      this.startSyncLoop();
+    }
+  }
+
+  /**
+   * Start sync loop (leader only)
    */
   private startSyncLoop(): void {
-    if (!this.isHost) return;
+    if (!this.network.isLeader()) return;
 
     this.syncInterval = setInterval(() => {
       this.sendSyncUpdate();
-    }, this.syncIntervalMs);
+    }, this.adaptiveSyncIntervalMs);
+  }
+
+  /**
+   * Stop sync loop
+   */
+  private stopSyncLoop(): void {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
   }
 
   /**
    * Send sync update to peers
    */
   private sendSyncUpdate(): void {
-    if (!this.videoElement || !this.isHost) return;
+    if (!this.videoElement || !this.network.isLeader()) return;
 
     const message: SyncMessage = {
       type: 'sync',
@@ -314,14 +485,14 @@ export class SyncManager {
       timestamp: Date.now(),
     };
 
-    this.connection.broadcast(message);
+    this.network.broadcast(message);
   }
 
   /**
    * Send current state to new peer
    */
   private sendCurrentState(): void {
-    if (!this.videoElement || !this.isHost) return;
+    if (!this.videoElement || !this.network.isLeader()) return;
 
     const message: SyncMessage = {
       type: 'sync',
@@ -331,20 +502,33 @@ export class SyncManager {
       videoDuration: this.videoDuration,
     };
 
-    this.connection.broadcast(message);
+    this.network.broadcast(message);
   }
 
   /**
    * Notify that we're ready to sync
    */
-  notifyReady(userId: string): void {
+  notifyReady(): void {
     const message: SyncMessage = {
       type: 'ready',
-      userId: userId,
       videoDuration: this.videoDuration,
     };
 
-    this.connection.sendMessage(message);
+    this.network.broadcast(message);
+  }
+
+  /**
+   * Get current video state
+   */
+  getCurrentState(): VideoState | null {
+    if (!this.videoElement) return null;
+
+    return {
+      isPlaying: !this.videoElement.paused,
+      position: this.videoElement.currentTime,
+      timestamp: Date.now(),
+      playbackRate: this.videoElement.playbackRate,
+    };
   }
 
   /**
@@ -355,14 +539,32 @@ export class SyncManager {
   }
 
   /**
+   * Set callback for buffering changes
+   */
+  onBufferingChange(callback: (isBuffering: boolean, peerId?: string) => void): void {
+    this.onBufferingChangeCallback = callback;
+  }
+
+  /**
+   * Get video duration
+   */
+  getVideoDuration(): number {
+    return this.videoDuration;
+  }
+
+  /**
+   * Check if any peer is buffering
+   */
+  isAnyPeerBuffering(): boolean {
+    return this.peersBuffering.size > 0;
+  }
+
+  /**
    * Cleanup
    */
   cleanup(): void {
-    if (this.syncInterval) {
-      clearInterval(this.syncInterval);
-      this.syncInterval = null;
-    }
-
+    this.stopSyncLoop();
     this.videoElement = null;
+    this.peersBuffering.clear();
   }
 }

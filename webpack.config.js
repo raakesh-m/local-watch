@@ -3,7 +3,7 @@ const webpack = require('webpack');
 
 module.exports = {
   entry: './renderer/app.ts',
-  target: 'web', // Changed from 'electron-renderer' to 'web' to avoid external marking
+  target: 'web',
   module: {
     rules: [
       {
@@ -15,6 +15,10 @@ module.exports = {
   },
   resolve: {
     extensions: ['.ts', '.js'],
+    alias: {
+      // Ensure pako works in browser environment
+      pako: path.resolve(__dirname, 'node_modules/pako'),
+    },
     fallback: {
       buffer: require.resolve('buffer/'),
       events: require.resolve('events/'),
@@ -37,4 +41,7 @@ module.exports = {
   ],
   mode: 'development',
   devtool: 'source-map',
+  optimization: {
+    minimize: false, // Keep readable for debugging
+  },
 };

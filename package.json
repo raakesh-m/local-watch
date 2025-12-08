@@ -44,7 +44,10 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "simple-peer": "^9.11.1"
+    "@types/pako": "^2.0.4",
+    "pako": "^2.1.0",
+    "simple-peer": "^9.11.1",
+    "unique-names-generator": "^4.7.1"
   },
   "config": {
     "forge": {

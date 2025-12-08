@@ -3,197 +3,609 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; media-src 'self' file:;" />
     <title>LocalWatch</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div id="app">
-      <!-- Home Screen -->
+      <!-- ===== Home Screen ===== -->
       <div id="home-screen" class="screen active">
-        <div class="container">
-          <h1 class="logo">LocalWatch</h1>
-          <p class="tagline">Watch local videos together, peer-to-peer</p>
+        <div class="home-container">
+          <div class="logo-section">
+            <div class="logo-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none"/>
+              </svg>
+            </div>
+            <h1 class="logo-text">LocalWatch</h1>
+            <p class="tagline">Watch together, perfectly synced</p>
+          </div>
 
-          <div class="button-group">
-            <button id="create-room-btn" class="btn btn-primary">
-              Create Room
+          <div class="home-actions">
+            <button id="create-room-btn" class="btn btn-primary btn-large">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="16"/>
+                <line x1="8" y1="12" x2="16" y2="12"/>
+              </svg>
+              <span>Create Room</span>
             </button>
-            <button id="join-room-btn" class="btn btn-secondary">
-              Join Room
+            <button id="join-room-btn" class="btn btn-secondary btn-large">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                <polyline points="10 17 15 12 10 7"/>
+                <line x1="15" y1="12" x2="3" y2="12"/>
+              </svg>
+              <span>Join Room</span>
             </button>
           </div>
 
-          <div class="info-box">
-            <p>
-              <strong>How it works:</strong> Create a room to host, or join
-              with a code. Everyone loads the same video file locally, and
-              playback stays in perfect sync.
-            </p>
+          <div class="home-info">
+            <div class="info-card">
+              <div class="info-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </div>
+              <div class="info-content">
+                <h3>Up to 8 viewers</h3>
+                <p>Watch with friends in perfect sync</p>
+              </div>
+            </div>
+            <div class="info-card">
+              <div class="info-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div class="info-content">
+                <h3>100% Private</h3>
+                <p>Peer-to-peer, no servers needed</p>
+              </div>
+            </div>
+            <div class="info-card">
+              <div class="info-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+              </div>
+              <div class="info-content">
+                <h3>Real-time Sync</h3>
+                <p>Play, pause, seek - all synced instantly</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="disclaimer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            <p>All participants must have the <strong>same video file</strong> (identical size and encoding)</p>
           </div>
         </div>
       </div>
 
-      <!-- Create Room Screen -->
+      <!-- ===== Create Room Screen ===== -->
       <div id="create-room-screen" class="screen">
-        <div class="container">
-          <button class="back-btn" id="create-back-btn">&larr; Back</button>
-
-          <h2>Create Room</h2>
-
-          <div class="step">
-            <h3>Step 1: Select your video file</h3>
-            <button id="select-video-btn" class="btn btn-secondary">
-              Choose Video File
+        <div class="screen-container">
+          <header class="screen-header">
+            <button class="back-btn" id="create-back-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="19" y1="12" x2="5" y2="12"/>
+                <polyline points="12 19 5 12 12 5"/>
+              </svg>
+              <span>Back</span>
             </button>
-            <div id="video-selected" class="status-message"></div>
-          </div>
+            <h2>Create Room</h2>
+            <div class="header-spacer"></div>
+          </header>
 
-          <div class="step" id="room-code-section" style="display: none">
-            <h3>Step 2: Share room code with friends</h3>
-            <div class="room-code-display">
-              <div class="room-code" id="room-code">------</div>
-              <button id="copy-code-btn" class="btn btn-small">Copy</button>
+          <div class="wizard">
+            <!-- Step 1: Nickname -->
+            <div class="wizard-step" id="create-step-1">
+              <div class="step-header">
+                <span class="step-number">1</span>
+                <span class="step-title">Choose your display name</span>
+              </div>
+              <div class="step-content">
+                <div class="input-group">
+                  <input type="text" id="create-nickname-input" class="text-input" placeholder="Enter nickname or leave empty for random" maxlength="20" />
+                  <button id="random-nickname-btn" class="btn btn-icon" title="Generate random name">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="1 4 1 10 7 10"/>
+                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
-            <p class="help-text">
-              Your friends need to enter this code to join your room
-            </p>
 
-            <div class="signal-exchange">
-              <h4>Connection Setup</h4>
-              <p class="help-text">
-                Copy your signal data and send it to your friend:
-              </p>
-              <textarea
-                id="host-signal-output"
-                class="signal-box"
-                readonly
-                placeholder="Generating signal..."
-              ></textarea>
-              <button id="copy-signal-btn" class="btn btn-small">
-                Copy Signal
-              </button>
-
-              <p class="help-text" style="margin-top: 20px">
-                Paste your friend's signal data here:
-              </p>
-              <textarea
-                id="guest-signal-input"
-                class="signal-box"
-                placeholder="Paste guest signal here..."
-              ></textarea>
-              <button id="connect-guest-btn" class="btn btn-primary">
-                Connect Guest
-              </button>
+            <!-- Step 2: Video Selection -->
+            <div class="wizard-step" id="create-step-2">
+              <div class="step-header">
+                <span class="step-number">2</span>
+                <span class="step-title">Select your video file</span>
+              </div>
+              <div class="step-content">
+                <button id="select-video-btn" class="btn btn-secondary file-select-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  <span>Choose Video File</span>
+                </button>
+                <div id="video-info" class="file-info hidden">
+                  <div class="file-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                      <line x1="7" y1="2" x2="7" y2="22"/>
+                      <line x1="17" y1="2" x2="17" y2="22"/>
+                      <line x1="2" y1="12" x2="22" y2="12"/>
+                      <line x1="2" y1="7" x2="7" y2="7"/>
+                      <line x1="2" y1="17" x2="7" y2="17"/>
+                      <line x1="17" y1="17" x2="22" y2="17"/>
+                      <line x1="17" y1="7" x2="22" y2="7"/>
+                    </svg>
+                  </div>
+                  <div class="file-details">
+                    <span class="file-name" id="video-name">video.mp4</span>
+                    <span class="file-size" id="video-size">0 MB</span>
+                  </div>
+                  <button class="btn btn-icon btn-remove" id="remove-video-btn" title="Remove">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div class="step" id="waiting-section" style="display: none">
-            <h3>Waiting for guests...</h3>
-            <div class="status-message">
-              <div class="loading-spinner"></div>
-              <p>Connected: <span id="connected-count">0</span> guests</p>
+            <!-- Step 3: Room Created -->
+            <div class="wizard-step hidden" id="create-step-3">
+              <div class="step-header">
+                <span class="step-number">3</span>
+                <span class="step-title">Share with friends</span>
+              </div>
+              <div class="step-content">
+                <div class="room-code-container">
+                  <label>Room Code</label>
+                  <div class="room-code-display">
+                    <span class="room-code" id="room-code">------</span>
+                    <button id="copy-code-btn" class="btn btn-icon" title="Copy code">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="signal-section">
+                  <label>Your Connection Signal</label>
+                  <p class="hint">Copy and share this with your friends</p>
+                  <div class="signal-container">
+                    <textarea id="host-signal-output" class="signal-box" readonly placeholder="Generating signal..."></textarea>
+                    <button id="copy-signal-btn" class="btn btn-secondary">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                      Copy Signal
+                    </button>
+                  </div>
+                </div>
+
+                <div class="signal-section">
+                  <label>Friend's Signal</label>
+                  <p class="hint">Paste the signal from your friend here</p>
+                  <div class="signal-container">
+                    <textarea id="guest-signal-input" class="signal-box" placeholder="Paste friend's signal here..."></textarea>
+                    <button id="connect-guest-btn" class="btn btn-primary">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="8.5" cy="7" r="4"/>
+                        <line x1="20" y1="8" x2="20" y2="14"/>
+                        <line x1="23" y1="11" x2="17" y2="11"/>
+                      </svg>
+                      Connect Friend
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <button id="start-watching-btn" class="btn btn-primary">
-              Start Watching
-            </button>
+
+            <!-- Step 4: Waiting Room -->
+            <div class="wizard-step hidden" id="create-step-4">
+              <div class="step-header">
+                <span class="step-number">4</span>
+                <span class="step-title">Waiting for friends</span>
+              </div>
+              <div class="step-content">
+                <div class="participants-panel">
+                  <h4>Participants</h4>
+                  <ul id="participants-list" class="participants-list">
+                    <!-- Dynamically populated -->
+                  </ul>
+                </div>
+
+                <div class="add-more-section">
+                  <p>Want to add more friends?</p>
+                  <button id="generate-new-signal-btn" class="btn btn-secondary">
+                    Generate New Signal
+                  </button>
+                  <div id="new-signal-container" class="hidden">
+                    <textarea id="new-host-signal" class="signal-box" readonly></textarea>
+                    <button id="copy-new-signal-btn" class="btn btn-icon" title="Copy">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                    </button>
+                    <div class="signal-section" style="margin-top: 1rem;">
+                      <textarea id="new-guest-signal-input" class="signal-box" placeholder="Paste new friend's signal..."></textarea>
+                      <button id="connect-new-guest-btn" class="btn btn-primary">Connect</button>
+                    </div>
+                  </div>
+                </div>
+
+                <button id="start-watching-btn" class="btn btn-primary btn-large start-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                  Start Watching
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Join Room Screen -->
+      <!-- ===== Join Room Screen ===== -->
       <div id="join-room-screen" class="screen">
-        <div class="container">
-          <button class="back-btn" id="join-back-btn">&larr; Back</button>
-
-          <h2>Join Room</h2>
-
-          <div class="step">
-            <h3>Step 1: Enter room code</h3>
-            <input
-              type="text"
-              id="room-code-input"
-              class="room-code-input"
-              placeholder="XXXXXX"
-              maxlength="6"
-            />
-          </div>
-
-          <div class="step">
-            <h3>Step 2: Select your video file</h3>
-            <button id="join-select-video-btn" class="btn btn-secondary">
-              Choose Video File
+        <div class="screen-container">
+          <header class="screen-header">
+            <button class="back-btn" id="join-back-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="19" y1="12" x2="5" y2="12"/>
+                <polyline points="12 19 5 12 12 5"/>
+              </svg>
+              <span>Back</span>
             </button>
-            <div id="join-video-selected" class="status-message"></div>
+            <h2>Join Room</h2>
+            <div class="header-spacer"></div>
+          </header>
+
+          <div class="wizard">
+            <!-- Step 1: Nickname -->
+            <div class="wizard-step" id="join-step-1">
+              <div class="step-header">
+                <span class="step-number">1</span>
+                <span class="step-title">Choose your display name</span>
+              </div>
+              <div class="step-content">
+                <div class="input-group">
+                  <input type="text" id="join-nickname-input" class="text-input" placeholder="Enter nickname or leave empty for random" maxlength="20" />
+                  <button id="join-random-nickname-btn" class="btn btn-icon" title="Generate random name">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="1 4 1 10 7 10"/>
+                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2: Room Code -->
+            <div class="wizard-step" id="join-step-2">
+              <div class="step-header">
+                <span class="step-number">2</span>
+                <span class="step-title">Enter room code</span>
+              </div>
+              <div class="step-content">
+                <input type="text" id="room-code-input" class="room-code-input" placeholder="XXXXXX" maxlength="6" autocomplete="off" spellcheck="false" />
+              </div>
+            </div>
+
+            <!-- Step 3: Video Selection -->
+            <div class="wizard-step" id="join-step-3">
+              <div class="step-header">
+                <span class="step-number">3</span>
+                <span class="step-title">Select the same video file</span>
+              </div>
+              <div class="step-content">
+                <button id="join-select-video-btn" class="btn btn-secondary file-select-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  <span>Choose Video File</span>
+                </button>
+                <div id="join-video-info" class="file-info hidden">
+                  <div class="file-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                      <line x1="7" y1="2" x2="7" y2="22"/>
+                      <line x1="17" y1="2" x2="17" y2="22"/>
+                      <line x1="2" y1="12" x2="22" y2="12"/>
+                    </svg>
+                  </div>
+                  <div class="file-details">
+                    <span class="file-name" id="join-video-name">video.mp4</span>
+                    <span class="file-size" id="join-video-size">0 MB</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 4: Signal Exchange -->
+            <div class="wizard-step" id="join-step-4">
+              <div class="step-header">
+                <span class="step-number">4</span>
+                <span class="step-title">Connect to host</span>
+              </div>
+              <div class="step-content">
+                <div class="signal-section">
+                  <label>Host's Signal</label>
+                  <p class="hint">Paste the signal from the room host</p>
+                  <textarea id="host-signal-input" class="signal-box" placeholder="Paste host's signal here..."></textarea>
+                </div>
+
+                <div class="signal-section hidden" id="guest-signal-section">
+                  <label>Your Signal</label>
+                  <p class="hint">Copy this and send it back to the host</p>
+                  <div class="signal-container">
+                    <textarea id="guest-signal-output" class="signal-box" readonly placeholder="Your signal will appear here..."></textarea>
+                    <button id="copy-guest-signal-btn" class="btn btn-secondary">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                      Copy Signal
+                    </button>
+                  </div>
+                </div>
+
+                <button id="join-room-connect-btn" class="btn btn-primary btn-large">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                    <polyline points="10 17 15 12 10 7"/>
+                    <line x1="15" y1="12" x2="3" y2="12"/>
+                  </svg>
+                  Connect to Room
+                </button>
+
+                <div id="join-status" class="status-message"></div>
+              </div>
+            </div>
           </div>
-
-          <div class="step">
-            <h3>Step 3: Exchange connection data</h3>
-            <p class="help-text">Paste the host's signal data here:</p>
-            <textarea
-              id="host-signal-input"
-              class="signal-box"
-              placeholder="Paste host signal here..."
-            ></textarea>
-
-            <p class="help-text" style="margin-top: 20px">
-              Copy your signal and send it to the host:
-            </p>
-            <textarea
-              id="guest-signal-output"
-              class="signal-box"
-              readonly
-              placeholder="Your signal will appear here..."
-            ></textarea>
-            <button id="copy-guest-signal-btn" class="btn btn-small">
-              Copy Signal
-            </button>
-          </div>
-
-          <button id="join-room-connect-btn" class="btn btn-primary">
-            Connect to Room
-          </button>
-
-          <div id="join-status" class="status-message"></div>
         </div>
       </div>
 
-      <!-- Player Screen -->
+      <!-- ===== Player Screen ===== -->
       <div id="player-screen" class="screen">
-        <button class="exit-btn" id="exit-player-btn">Exit Room</button>
+        <div class="player-wrapper">
+          <!-- Video Container -->
+          <div class="video-container" id="video-container">
+            <video id="video-player" class="video-player"></video>
 
-        <div class="player-container">
-          <video id="video-player" class="video-player"></video>
+            <!-- Overlay Controls (shown on hover/interaction) -->
+            <div class="video-overlay" id="video-overlay">
+              <!-- Top Bar -->
+              <div class="overlay-top">
+                <button class="btn btn-icon exit-btn" id="exit-player-btn" title="Exit Room">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+                <div class="room-info">
+                  <span id="room-code-display" class="room-badge"></span>
+                  <span id="connection-indicator" class="connection-badge">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connected</span>
+                  </span>
+                </div>
+                <button class="btn btn-icon chat-toggle-btn" id="chat-toggle-btn" title="Toggle Chat">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  <span class="chat-badge hidden" id="chat-badge">0</span>
+                </button>
+              </div>
 
-          <div class="player-controls">
-            <button id="play-pause-btn" class="control-btn">▶</button>
-            <input
-              type="range"
-              id="seek-bar"
-              class="seek-bar"
-              min="0"
-              max="100"
-              value="0"
-            />
-            <span id="time-display" class="time-display">0:00 / 0:00</span>
-            <button id="fullscreen-btn" class="control-btn">⛶</button>
+              <!-- Center Play Button -->
+              <div class="overlay-center">
+                <button class="center-play-btn" id="center-play-btn">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Bottom Controls -->
+              <div class="overlay-bottom">
+                <!-- Progress Bar -->
+                <div class="progress-container">
+                  <div class="progress-bar" id="progress-bar">
+                    <div class="progress-buffered" id="progress-buffered"></div>
+                    <div class="progress-played" id="progress-played"></div>
+                    <div class="progress-handle" id="progress-handle"></div>
+                  </div>
+                  <div class="time-tooltip" id="time-tooltip">0:00</div>
+                </div>
+
+                <!-- Controls Row -->
+                <div class="controls-row">
+                  <div class="controls-left">
+                    <button class="btn btn-icon" id="play-pause-btn" title="Play/Pause (Space)">
+                      <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                      </svg>
+                      <svg class="icon-pause hidden" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="4" width="4" height="16"/>
+                        <rect x="14" y="4" width="4" height="16"/>
+                      </svg>
+                    </button>
+
+                    <button class="btn btn-icon" id="backward-btn" title="Backward 10s (←)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"/>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                        <text x="12" y="14" font-size="6" fill="currentColor" text-anchor="middle">10</text>
+                      </svg>
+                    </button>
+
+                    <button class="btn btn-icon" id="forward-btn" title="Forward 10s (→)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        <text x="12" y="14" font-size="6" fill="currentColor" text-anchor="middle">10</text>
+                      </svg>
+                    </button>
+
+                    <div class="volume-control">
+                      <button class="btn btn-icon" id="mute-btn" title="Mute (M)">
+                        <svg class="icon-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                        </svg>
+                        <svg class="icon-muted hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                          <line x1="23" y1="9" x2="17" y2="15"/>
+                          <line x1="17" y1="9" x2="23" y2="15"/>
+                        </svg>
+                      </button>
+                      <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="100" />
+                    </div>
+
+                    <span class="time-display" id="time-display">0:00 / 0:00</span>
+                  </div>
+
+                  <div class="controls-right">
+                    <div class="speed-control">
+                      <button class="btn btn-icon" id="speed-btn" title="Playback Speed">
+                        <span id="speed-display">1x</span>
+                      </button>
+                      <div class="speed-menu hidden" id="speed-menu">
+                        <button data-speed="0.5">0.5x</button>
+                        <button data-speed="0.75">0.75x</button>
+                        <button data-speed="1" class="active">1x</button>
+                        <button data-speed="1.25">1.25x</button>
+                        <button data-speed="1.5">1.5x</button>
+                        <button data-speed="2">2x</button>
+                      </div>
+                    </div>
+
+                    <button class="btn btn-icon" id="pip-btn" title="Picture in Picture (P)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                        <rect x="11" y="9" width="9" height="6" rx="1" ry="1" fill="currentColor"/>
+                      </svg>
+                    </button>
+
+                    <button class="btn btn-icon" id="fullscreen-btn" title="Fullscreen (F)">
+                      <svg class="icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 3 21 3 21 9"/>
+                        <polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/>
+                        <line x1="3" y1="21" x2="10" y2="14"/>
+                      </svg>
+                      <svg class="icon-compress hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="4 14 10 14 10 20"/>
+                        <polyline points="20 10 14 10 14 4"/>
+                        <line x1="14" y1="10" x2="21" y2="3"/>
+                        <line x1="3" y1="21" x2="10" y2="14"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Buffering Indicator -->
+            <div class="buffering-indicator hidden" id="buffering-indicator">
+              <div class="spinner"></div>
+              <span id="buffering-text">Buffering...</span>
+            </div>
+          </div>
+
+          <!-- Chat Panel -->
+          <div class="chat-panel hidden" id="chat-panel">
+            <div class="chat-header">
+              <h3>Chat</h3>
+              <button class="btn btn-icon" id="close-chat-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div class="participants-mini">
+              <span id="participant-count">0 watching</span>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+              <!-- Messages populated here -->
+            </div>
+            <div class="chat-input-container">
+              <input type="text" id="chat-input" class="chat-input" placeholder="Type a message..." maxlength="500" />
+              <button class="btn btn-icon" id="send-chat-btn">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
-        <div class="status-bar">
-          <span class="status-indicator">
-            <span id="connection-status" class="status-dot"></span>
-            <span id="connection-text">Connecting...</span>
-          </span>
-          <span id="room-code-display"></span>
+        <!-- Status Bar -->
+        <div class="player-status-bar" id="player-status-bar">
+          <div class="status-left">
+            <span class="sync-status" id="sync-status">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              <span>Synced</span>
+            </span>
+          </div>
+          <div class="status-right">
+            <span class="keyboard-hint">Space: Play/Pause • ←→: Seek • F: Fullscreen • M: Mute</span>
+          </div>
         </div>
       </div>
 
-      <!-- Error Modal -->
-      <div id="error-modal" class="modal">
+      <!-- ===== Toast Container ===== -->
+      <div id="toast-container" class="toast-container"></div>
+
+      <!-- ===== Modal ===== -->
+      <div id="modal" class="modal hidden">
+        <div class="modal-backdrop" id="modal-backdrop"></div>
         <div class="modal-content">
-          <h3>Error</h3>
-          <p id="error-message"></p>
-          <button id="error-ok-btn" class="btn btn-primary">OK</button>
+          <div class="modal-header">
+            <h3 id="modal-title">Title</h3>
+            <button class="btn btn-icon" id="modal-close-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body" id="modal-body"></div>
+          <div class="modal-footer" id="modal-footer"></div>
         </div>
       </div>
     </div>
