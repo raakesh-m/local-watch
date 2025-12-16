@@ -1436,3 +1436,568 @@ body {
     display: none;
   }
 }
+
+/* ===== Name Setup Modal ===== */
+.name-modal-content {
+  max-width: 400px;
+}
+
+.name-modal-content .modal-header h3 {
+  text-align: center;
+  width: 100%;
+}
+
+.name-input-container {
+  position: relative;
+}
+
+.name-validation-error {
+  display: block;
+  color: var(--error);
+  font-size: 0.85rem;
+  margin-top: var(--space-xs);
+}
+
+.name-validation-error.hidden {
+  display: none;
+}
+
+/* ===== Media Source Tabs ===== */
+.media-source-tabs {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.media-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.media-tab svg {
+  width: 20px;
+  height: 20px;
+}
+
+.media-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.media-tab.active {
+  background: var(--bg-elevated);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.media-panel {
+  animation: fadeIn var(--transition-fast);
+}
+
+.media-panel.hidden {
+  display: none;
+}
+
+/* ===== Torrent Input Section ===== */
+.torrent-input-section {
+  margin-bottom: var(--space-md);
+}
+
+.torrent-input-section label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.torrent-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: var(--space-lg) 0;
+  color: var(--text-muted);
+}
+
+.torrent-divider::before,
+.torrent-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.torrent-divider span {
+  padding: 0 var(--space-md);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.torrent-icon {
+  background: linear-gradient(135deg, #6366f1, #a855f7) !important;
+}
+
+/* ===== Enhanced Buffering Indicator ===== */
+.buffering-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 50;
+}
+
+.buffering-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.buffering-main-text {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.buffering-user-text {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  text-align: center;
+  max-width: 280px;
+}
+
+.buffering-user-text.hidden {
+  display: none;
+}
+
+/* ===== Torrent Progress Indicator ===== */
+.torrent-progress-indicator {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-md);
+  z-index: 40;
+}
+
+.torrent-progress-mini {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.torrent-progress-mini:hover {
+  background: var(--bg-elevated);
+}
+
+.torrent-progress-mini svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent-primary);
+}
+
+.torrent-progress-mini span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+.torrent-progress-details {
+  position: absolute;
+  top: calc(100% + var(--space-sm));
+  left: 0;
+  min-width: 200px;
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: fadeIn var(--transition-fast);
+}
+
+.torrent-progress-details.hidden {
+  display: none;
+}
+
+.torrent-stat {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.stat-value {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.torrent-progress-bar {
+  height: 4px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-top: var(--space-sm);
+}
+
+.torrent-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+  border-radius: var(--radius-full);
+  transition: width var(--transition-fast);
+}
+
+/* ===== Torrent File Picker Modal ===== */
+.torrent-file-modal-content {
+  max-width: 500px;
+}
+
+.torrent-file-list {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: var(--space-md);
+}
+
+.torrent-file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.torrent-file-item:hover {
+  background: var(--bg-hover);
+}
+
+.torrent-file-item .file-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+}
+
+.torrent-file-item .file-icon svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-primary);
+}
+
+.torrent-file-item .file-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.torrent-file-item .file-name {
+  display: block;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.torrent-file-item .file-size {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+}
+
+/* ===== Waiting for Files Modal ===== */
+.waiting-files-modal-content {
+  max-width: 500px;
+  width: 90%;
+}
+
+.waiting-files-info {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+}
+
+.file-info-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-info-box strong {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+#required-filename {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--accent-primary);
+  word-break: break-all;
+}
+
+.file-size-text {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+}
+
+.user-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 1rem;
+}
+
+.user-status-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.user-status-item.has-file {
+  background: rgba(52, 211, 153, 0.1);
+  border-left: 3px solid var(--success);
+}
+
+.user-status-item.waiting {
+  background: rgba(251, 191, 36, 0.1);
+  border-left: 3px solid var(--warning);
+}
+
+.user-status-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.user-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.user-status-badge.ready {
+  background: rgba(52, 211, 153, 0.2);
+  color: var(--success);
+}
+
+.user-status-badge.waiting {
+  background: rgba(251, 191, 36, 0.2);
+  color: var(--warning);
+}
+
+.user-status-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===== Voting Modal ===== */
+.voting-modal-content {
+  max-width: 500px;
+  width: 90%;
+}
+
+.vote-message {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.vote-message strong {
+  color: var(--accent-primary);
+}
+
+.vote-file-info {
+  padding: 1rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  margin-bottom: 1.5rem;
+}
+
+.vote-filename {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  word-break: break-all;
+}
+
+.vote-filesize {
+  font-size: 0.9rem;
+  color: var(--text-tertiary);
+  margin-bottom: 0.5rem;
+}
+
+.vote-type {
+  margin-top: 0.5rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-torrent {
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+}
+
+.badge-local {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.vote-status {
+  margin-bottom: 1.5rem;
+}
+
+.vote-progress {
+  margin-bottom: 1rem;
+}
+
+.vote-bar {
+  display: flex;
+  height: 40px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-elevated);
+  margin-bottom: 0.75rem;
+}
+
+.vote-bar-yes {
+  background: linear-gradient(135deg, var(--success), #10b981);
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+}
+
+.vote-bar-no {
+  background: linear-gradient(135deg, var(--error), #f87171);
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+}
+
+.vote-counts {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.vote-count-yes,
+.vote-count-no {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.vote-count-yes {
+  color: var(--success);
+}
+
+.vote-count-no {
+  color: var(--error);
+}
+
+.vote-count-yes svg,
+.vote-count-no svg {
+  width: 18px;
+  height: 18px;
+}
+
+.vote-timer {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-tertiary);
+  padding: 0.75rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+}
+
+.vote-timer span {
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+.vote-footer {
+  display: flex;
+  gap: 1rem;
+}
+
+.vote-footer button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.vote-footer button svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ===== Animations ===== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

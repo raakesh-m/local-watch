@@ -37,6 +37,7 @@
     "eslint": "^8.54.0",
     "events": "^3.3.0",
     "process": "^0.11.10",
+    "stream-browserify": "^3.0.0",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.2",
     "util": "^0.12.5",
@@ -45,9 +46,11 @@
   },
   "dependencies": {
     "@types/pako": "^2.0.4",
+    "@types/webtorrent": "^0.110.1",
     "pako": "^2.1.0",
     "simple-peer": "^9.11.1",
-    "unique-names-generator": "^4.7.1"
+    "unique-names-generator": "^4.7.1",
+    "webtorrent": "^2.8.5"
   },
   "config": {
     "forge": {

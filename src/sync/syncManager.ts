@@ -1,4 +1,4 @@
-import { MeshNetwork, SyncMessage } from '../p2p/meshNetwork';
+import { MeshNetwork, SyncMessage, MediaSource } from '../p2p/meshNetwork';
 
 export interface VideoState {
   isPlaying: boolean;
@@ -7,12 +7,19 @@ export interface VideoState {
   playbackRate: number;
 }
 
+export interface BufferingInfo {
+  peerId: string;
+  nickname: string;
+  isBuffering: boolean;
+}
+
 export class SyncManager {
   private network: MeshNetwork;
   private videoElement: HTMLVideoElement | null = null;
   private syncInterval: NodeJS.Timeout | null = null;
   private onStateUpdateCallback: ((state: VideoState) => void) | null = null;
-  private onBufferingChangeCallback: ((isBuffering: boolean, peerId?: string) => void) | null = null;
+  private onBufferingChangeCallback: ((info: BufferingInfo) => void) | null = null;
+  private onMediaSourceCallback: ((source: MediaSource) => void) | null = null;
   private videoDuration: number = 0;
   private lastSyncTime: number = 0;
   private isLocalAction: boolean = false;
@@ -30,8 +37,8 @@ export class SyncManager {
   private latencyBuffer: number[] = [];
   private averageLatency: number = 0;
 
-  // Buffering coordination
-  private peersBuffering: Set<string> = new Set();
+  // Buffering coordination - stores peerId -> nickname mapping
+  private peersBuffering: Map<string, string> = new Map();
   private wasPlayingBeforeBuffer: boolean = false;
 
   constructor(network: MeshNetwork) {
@@ -166,13 +173,20 @@ export class SyncManager {
       type: 'buffering',
       isBuffering,
       senderId: this.network.getLocalId(),
+      senderNickname: this.network.getLocalNickname(),
+      bufferingUserId: this.network.getLocalId(),
+      bufferingUserNickname: this.network.getLocalNickname(),
       position: this.videoElement.currentTime,
     };
 
     this.network.broadcast(message);
 
     if (this.onBufferingChangeCallback) {
-      this.onBufferingChangeCallback(isBuffering);
+      this.onBufferingChangeCallback({
+        peerId: this.network.getLocalId(),
+        nickname: this.network.getLocalNickname(),
+        isBuffering,
+      });
     }
   }
 
@@ -200,6 +214,14 @@ export class SyncManager {
    * Handle incoming sync message
    */
   private handleSyncMessage(message: SyncMessage, senderId: string): void {
+    // Handle media_source even without video element
+    if (message.type === 'media_source' && message.mediaSource) {
+      if (this.onMediaSourceCallback) {
+        this.onMediaSourceCallback(message.mediaSource);
+      }
+      return;
+    }
+
     if (!this.videoElement) return;
 
     switch (message.type) {
@@ -216,7 +238,11 @@ export class SyncManager {
         this.applySync(message);
         break;
       case 'buffering':
-        this.handlePeerBuffering(senderId, message.isBuffering || false);
+        this.handlePeerBuffering(
+          message.bufferingUserId || senderId,
+          message.bufferingUserNickname || 'Unknown',
+          message.isBuffering || false
+        );
         break;
       case 'ready':
         console.log('Peer ready:', senderId);
@@ -382,7 +408,7 @@ export class SyncManager {
   /**
    * Handle peer buffering state
    */
-  private handlePeerBuffering(peerId: string, isBuffering: boolean): void {
+  private handlePeerBuffering(peerId: string, nickname: string, isBuffering: boolean): void {
     if (isBuffering) {
       // Peer started buffering
       if (this.peersBuffering.size === 0 && this.videoElement && !this.videoElement.paused) {
@@ -391,7 +417,7 @@ export class SyncManager {
         this.videoElement.pause();
         this.isLocalAction = false;
       }
-      this.peersBuffering.add(peerId);
+      this.peersBuffering.set(peerId, nickname);
     } else {
       // Peer stopped buffering
       this.peersBuffering.delete(peerId);
@@ -405,8 +431,22 @@ export class SyncManager {
     }
 
     if (this.onBufferingChangeCallback) {
-      this.onBufferingChangeCallback(isBuffering, peerId);
+      this.onBufferingChangeCallback({ peerId, nickname, isBuffering });
     }
+  }
+
+  /**
+   * Get all peers currently buffering
+   */
+  getBufferingPeers(): Map<string, string> {
+    return new Map(this.peersBuffering);
+  }
+
+  /**
+   * Check if any peer is buffering
+   */
+  isAnyPeerBuffering(): boolean {
+    return this.peersBuffering.size > 0;
   }
 
   /**
@@ -541,8 +581,15 @@ export class SyncManager {
   /**
    * Set callback for buffering changes
    */
-  onBufferingChange(callback: (isBuffering: boolean, peerId?: string) => void): void {
+  onBufferingChange(callback: (info: BufferingInfo) => void): void {
     this.onBufferingChangeCallback = callback;
+  }
+
+  /**
+   * Set callback for media source changes (when peer broadcasts torrent)
+   */
+  onMediaSource(callback: (source: MediaSource) => void): void {
+    this.onMediaSourceCallback = callback;
   }
 
   /**
@@ -550,13 +597,6 @@ export class SyncManager {
    */
   getVideoDuration(): number {
     return this.videoDuration;
-  }
-
-  /**
-   * Check if any peer is buffering
-   */
-  isAnyPeerBuffering(): boolean {
-    return this.peersBuffering.size > 0;
   }
 
   /**

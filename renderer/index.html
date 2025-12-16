@@ -3,12 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; media-src 'self' file:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: blob:; media-src 'self' file: blob:; connect-src 'self' wss://tracker.btorrent.xyz wss://tracker.openwebtorrent.com wss://tracker.webtorrent.dev wss:;" />
     <title>LocalWatch</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div id="app">
+      <!-- ===== Name Setup Modal (First Time) ===== -->
+      <div id="name-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content name-modal-content">
+          <div class="modal-header">
+            <h3>Welcome to LocalWatch!</h3>
+          </div>
+          <div class="modal-body">
+            <p>Enter your display name. This will be shown to others when you watch together.</p>
+            <div class="name-input-container">
+              <input type="text" id="setup-name-input" class="text-input" placeholder="Your name" maxlength="20" autofocus />
+              <span class="name-validation-error hidden" id="name-validation-error"></span>
+            </div>
+            <p class="hint">2-20 characters, letters, numbers, and spaces only</p>
+          </div>
+          <div class="modal-footer">
+            <button id="save-name-btn" class="btn btn-primary">
+              Continue
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- ===== Home Screen ===== -->
       <div id="home-screen" class="screen active">
         <div class="home-container">
@@ -129,44 +152,110 @@
               </div>
             </div>
 
-            <!-- Step 2: Video Selection -->
+            <!-- Step 2: Media Source Selection -->
             <div class="wizard-step" id="create-step-2">
               <div class="step-header">
                 <span class="step-number">2</span>
-                <span class="step-title">Select your video file</span>
+                <span class="step-title">Choose your media source</span>
               </div>
               <div class="step-content">
-                <button id="select-video-btn" class="btn btn-secondary file-select-btn">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="17 8 12 3 7 8"/>
-                    <line x1="12" y1="3" x2="12" y2="15"/>
-                  </svg>
-                  <span>Choose Video File</span>
-                </button>
-                <div id="video-info" class="file-info hidden">
-                  <div class="file-icon">
+                <!-- Media Source Tabs -->
+                <div class="media-source-tabs">
+                  <button class="media-tab active" id="tab-local-file" data-tab="local">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
-                      <line x1="7" y1="2" x2="7" y2="22"/>
-                      <line x1="17" y1="2" x2="17" y2="22"/>
-                      <line x1="2" y1="12" x2="22" y2="12"/>
-                      <line x1="2" y1="7" x2="7" y2="7"/>
-                      <line x1="2" y1="17" x2="7" y2="17"/>
-                      <line x1="17" y1="17" x2="22" y2="17"/>
-                      <line x1="17" y1="7" x2="22" y2="7"/>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
                     </svg>
-                  </div>
-                  <div class="file-details">
-                    <span class="file-name" id="video-name">video.mp4</span>
-                    <span class="file-size" id="video-size">0 MB</span>
-                  </div>
-                  <button class="btn btn-icon btn-remove" id="remove-video-btn" title="Remove">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="18" y1="6" x2="6" y2="18"/>
-                      <line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
+                    Local File
                   </button>
+                  <button class="media-tab" id="tab-torrent" data-tab="torrent">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 6v6l4 2"/>
+                    </svg>
+                    Torrent
+                  </button>
+                </div>
+
+                <!-- Local File Panel -->
+                <div class="media-panel" id="panel-local-file">
+                  <button id="select-video-btn" class="btn btn-secondary file-select-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <span>Choose Video File</span>
+                  </button>
+                  <div id="video-info" class="file-info hidden">
+                    <div class="file-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                        <line x1="7" y1="2" x2="7" y2="22"/>
+                        <line x1="17" y1="2" x2="17" y2="22"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <line x1="2" y1="7" x2="7" y2="7"/>
+                        <line x1="2" y1="17" x2="7" y2="17"/>
+                        <line x1="17" y1="17" x2="22" y2="17"/>
+                        <line x1="17" y1="7" x2="22" y2="7"/>
+                      </svg>
+                    </div>
+                    <div class="file-details">
+                      <span class="file-name" id="video-name">video.mp4</span>
+                      <span class="file-size" id="video-size">0 MB</span>
+                    </div>
+                    <button class="btn btn-icon btn-remove" id="remove-video-btn" title="Remove">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <p class="hint">All participants must have the same file</p>
+                </div>
+
+                <!-- Torrent Panel -->
+                <div class="media-panel hidden" id="panel-torrent">
+                  <div class="torrent-input-section">
+                    <label>Magnet Link</label>
+                    <div class="input-group">
+                      <input type="text" id="magnet-link-input" class="text-input" placeholder="magnet:?xt=urn:btih:..." />
+                      <button id="load-magnet-btn" class="btn btn-primary">Load</button>
+                    </div>
+                  </div>
+                  <div class="torrent-divider">
+                    <span>or</span>
+                  </div>
+                  <div class="torrent-input-section">
+                    <label>Torrent File</label>
+                    <button id="select-torrent-btn" class="btn btn-secondary file-select-btn">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      <span>Choose .torrent File</span>
+                    </button>
+                  </div>
+                  <div id="torrent-info" class="file-info hidden">
+                    <div class="file-icon torrent-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                      </svg>
+                    </div>
+                    <div class="file-details">
+                      <span class="file-name" id="torrent-name">Loading...</span>
+                      <span class="file-size" id="torrent-size">0 MB</span>
+                    </div>
+                    <button class="btn btn-icon btn-remove" id="remove-torrent-btn" title="Remove">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <p class="hint">Everyone will stream the same torrent - no file sharing needed!</p>
                 </div>
               </div>
             </div>
@@ -535,10 +624,41 @@
               </div>
             </div>
 
-            <!-- Buffering Indicator -->
+            <!-- Buffering Indicator (enhanced for torrent) -->
             <div class="buffering-indicator hidden" id="buffering-indicator">
-              <div class="spinner"></div>
-              <span id="buffering-text">Buffering...</span>
+              <div class="buffering-content">
+                <div class="spinner"></div>
+                <span class="buffering-main-text" id="buffering-text">Buffering...</span>
+                <span class="buffering-user-text hidden" id="buffering-user-text"></span>
+              </div>
+            </div>
+
+            <!-- Torrent Download Progress (hoverable) -->
+            <div class="torrent-progress-indicator hidden" id="torrent-progress-indicator">
+              <div class="torrent-progress-mini">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 6v6l4 2"/>
+                </svg>
+                <span id="torrent-progress-percent">0%</span>
+              </div>
+              <div class="torrent-progress-details hidden" id="torrent-progress-details">
+                <div class="torrent-stat">
+                  <span class="stat-label">Downloaded</span>
+                  <span class="stat-value" id="torrent-downloaded">0 MB / 0 MB</span>
+                </div>
+                <div class="torrent-stat">
+                  <span class="stat-label">Speed</span>
+                  <span class="stat-value" id="torrent-speed">0 KB/s</span>
+                </div>
+                <div class="torrent-stat">
+                  <span class="stat-label">Peers</span>
+                  <span class="stat-value" id="torrent-peers">0</span>
+                </div>
+                <div class="torrent-progress-bar">
+                  <div class="torrent-progress-fill" id="torrent-progress-fill"></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -606,6 +726,114 @@
           </div>
           <div class="modal-body" id="modal-body"></div>
           <div class="modal-footer" id="modal-footer"></div>
+        </div>
+      </div>
+
+      <!-- ===== Torrent File Picker Modal ===== -->
+      <div id="torrent-file-modal" class="modal hidden">
+        <div class="modal-backdrop" id="torrent-file-backdrop"></div>
+        <div class="modal-content torrent-file-modal-content">
+          <div class="modal-header">
+            <h3>Select Video File</h3>
+            <button class="btn btn-icon" id="torrent-file-close-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>This torrent contains multiple video files. Select which one to watch:</p>
+            <div class="torrent-file-list" id="torrent-file-list">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Waiting for Files Modal ===== -->
+      <div id="waiting-files-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content waiting-files-modal-content">
+          <div class="modal-header">
+            <h3>Waiting for Everyone</h3>
+          </div>
+          <div class="modal-body">
+            <p id="waiting-files-message">Please upload the same video file to continue.</p>
+            <div class="waiting-files-info">
+              <div class="file-info-box">
+                <strong>Required File:</strong>
+                <div id="required-filename">Loading...</div>
+                <div id="required-filesize" class="file-size-text">Size: 0 MB</div>
+              </div>
+            </div>
+            <div class="user-status-list" id="user-status-list">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Voting Modal ===== -->
+      <div id="voting-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content voting-modal-content">
+          <div class="modal-header">
+            <h3>Video Change Request</h3>
+          </div>
+          <div class="modal-body">
+            <div class="vote-message">
+              <strong id="vote-requester">Someone</strong> wants to change the video to:
+            </div>
+            <div class="vote-file-info">
+              <div class="vote-filename" id="vote-filename">video.mp4</div>
+              <div class="vote-filesize" id="vote-filesize">1.5 GB</div>
+              <div class="vote-type" id="vote-type">
+                <span class="badge badge-torrent">Torrent</span>
+              </div>
+            </div>
+            <div class="vote-status">
+              <div class="vote-progress">
+                <div class="vote-bar">
+                  <div class="vote-bar-yes" id="vote-bar-yes" style="width: 0%"></div>
+                  <div class="vote-bar-no" id="vote-bar-no" style="width: 0%"></div>
+                </div>
+                <div class="vote-counts">
+                  <span class="vote-count-yes">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    <span id="vote-count-yes">0</span>
+                  </span>
+                  <span class="vote-count-no">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                    <span id="vote-count-no">0</span>
+                  </span>
+                </div>
+              </div>
+              <div class="vote-timer">
+                Time remaining: <span id="vote-timer">30s</span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer vote-footer">
+            <button id="vote-reject-btn" class="btn btn-secondary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+              Reject
+            </button>
+            <button id="vote-accept-btn" class="btn btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Accept
+            </button>
+          </div>
         </div>
       </div>
     </div>

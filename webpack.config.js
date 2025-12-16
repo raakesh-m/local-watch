@@ -18,15 +18,26 @@ module.exports = {
     alias: {
       // Ensure pako works in browser environment
       pako: path.resolve(__dirname, 'node_modules/pako'),
+      // Fix process/browser resolution
+      'process/browser': require.resolve('process/browser'),
     },
     fallback: {
       buffer: require.resolve('buffer/'),
       events: require.resolve('events/'),
       util: require.resolve('util/'),
-      stream: false,
+      process: require.resolve('process/browser'),
+      stream: require.resolve('stream-browserify'),
       crypto: false,
       path: false,
       fs: false,
+      net: false,
+      tls: false,
+      dgram: false,
+      dns: false,
+      http: false,
+      https: false,
+      os: false,
+      zlib: false,
     },
   },
   output: {

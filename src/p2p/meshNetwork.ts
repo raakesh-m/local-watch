@@ -28,10 +28,22 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+// Media source types
+export type MediaSourceType = 'local' | 'torrent';
+
+export interface MediaSource {
+  type: MediaSourceType;
+  magnetUri?: string;        // For torrent
+  fileIndex?: number;        // For multi-file torrents
+  fileName?: string;         // Display name
+  fileSize?: number;         // File size in bytes
+}
+
 export interface SyncMessage {
   type: 'sync' | 'play' | 'pause' | 'seek' | 'join' | 'ready' | 'error' |
         'chat' | 'peer_list' | 'leader_election' | 'ping' | 'pong' |
-        'buffering' | 'request_signal' | 'signal_response' | 'user_info' | 'kick';
+        'buffering' | 'request_signal' | 'signal_response' | 'user_info' | 'kick' |
+        'media_source' | 'media_loaded' | 'file_uploaded' | 'media_change_request' | 'vote_response';
   senderId?: string;
   senderNickname?: string;
   isPlaying?: boolean;
@@ -51,8 +63,28 @@ export interface SyncMessage {
   // File info
   fileSize?: number;
   fileDuration?: number;
-  // Buffering
+  // Buffering - now includes user info
   isBuffering?: boolean;
+  bufferingUserId?: string;
+  bufferingUserNickname?: string;
+  // Media source (for torrent sharing)
+  mediaSource?: MediaSource;
+  // Media coordination
+  mediaType?: 'local' | 'torrent';
+  filename?: string;
+  magnetUri?: string;
+  fileIndex?: number;
+  loadedBy?: string;
+  loadedByName?: string;
+  uploadedBy?: string;
+  uploadedByName?: string;
+  // Voting
+  requestId?: string;
+  requestedBy?: string;
+  requestedByName?: string;
+  vote?: boolean;
+  voterId?: string;
+  voterName?: string;
 }
 
 export type NetworkStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
@@ -361,7 +393,7 @@ export class MeshNetwork {
       }
 
       // Relay sync messages to all other peers (for mesh)
-      if (['sync', 'play', 'pause', 'seek', 'buffering'].includes(message.type)) {
+      if (['sync', 'play', 'pause', 'seek', 'buffering', 'media_source'].includes(message.type)) {
         this.relayMessage(message, senderId);
       }
     } catch (error) {
@@ -576,6 +608,37 @@ export class MeshNetwork {
   }
 
   /**
+   * Broadcast media source (torrent/local) to all peers
+   * Used when host sets up a torrent for everyone to load
+   */
+  broadcastMediaSource(mediaSource: MediaSource): void {
+    const message: SyncMessage = {
+      type: 'media_source',
+      senderId: this.localId,
+      senderNickname: this.localNickname,
+      mediaSource,
+    };
+
+    this.broadcast(message);
+  }
+
+  /**
+   * Broadcast buffering status with user info
+   */
+  broadcastBuffering(isBuffering: boolean): void {
+    const message: SyncMessage = {
+      type: 'buffering',
+      senderId: this.localId,
+      senderNickname: this.localNickname,
+      isBuffering,
+      bufferingUserId: this.localId,
+      bufferingUserNickname: this.localNickname,
+    };
+
+    this.broadcast(message);
+  }
+
+  /**
    * Broadcast current peer list
    */
   private broadcastPeerList(): void {
@@ -692,6 +755,16 @@ export class MeshNetwork {
       }
     }
     return count;
+  }
+
+  getConnectedPeers(): Peer[] {
+    const connectedPeers: Peer[] = [];
+    for (const peer of this.peers.values()) {
+      if (peer.status === 'connected') {
+        connectedPeers.push(peer);
+      }
+    }
+    return connectedPeers;
   }
 
   isRoomHost(): boolean {

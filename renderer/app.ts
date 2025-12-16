@@ -1,11 +1,21 @@
 /**
  * LocalWatch 2.0 - Main Application
- * A modern P2P video synchronization app
+ * A modern P2P video synchronization app with torrent streaming
  */
 
-import { MeshNetwork, NetworkStatus, ChatMessage, Peer } from '../src/p2p/meshNetwork';
-import { SyncManager } from '../src/sync/syncManager';
-import { generateNickname, getAvatarColor, getInitials } from '../src/utils/names';
+import { MeshNetwork, NetworkStatus, ChatMessage, Peer, MediaSource, MediaSourceType } from '../src/p2p/meshNetwork';
+import { SyncManager, BufferingInfo } from '../src/sync/syncManager';
+import { MediaController, MediaState, FileUploadStatus, VoteRequest } from '../src/sync/mediaController';
+import {
+  generateNickname,
+  getAvatarColor,
+  getInitials,
+  getSavedUsername,
+  saveUsername,
+  hasSavedUsername,
+  validateName
+} from '../src/utils/names';
+import { TorrentManager, TorrentProgress, TorrentFileInfo, formatSize, formatSpeed } from '../src/torrent/torrentManager';
 
 // ===== Types =====
 interface VideoFile {
@@ -15,6 +25,14 @@ interface VideoFile {
   formattedSize: string;
 }
 
+interface TorrentMedia {
+  magnetUri: string;
+  fileName?: string;
+  fileSize?: number;
+  fileIndex?: number;
+}
+
+type MediaSourceMode = 'local' | 'torrent';
 type Screen = 'home' | 'create-room' | 'join-room' | 'player';
 
 // ===== Main Application Class =====
@@ -23,6 +41,7 @@ class LocalWatchApp {
   private currentScreen: Screen = 'home';
   private network: MeshNetwork | null = null;
   private syncManager: SyncManager | null = null;
+  private mediaController: MediaController | null = null;
   private selectedVideo: VideoFile | null = null;
   private nickname: string = '';
   private videoDuration: number = 0;
@@ -32,15 +51,30 @@ class LocalWatchApp {
   private overlayTimeout: NodeJS.Timeout | null = null;
   private chatMessages: ChatMessage[] = [];
 
+  // Torrent state
+  private torrentManager: TorrentManager | null = null;
+  private torrentMedia: TorrentMedia | null = null;
+  private mediaSourceMode: MediaSourceMode = 'local';
+  private isTorrentMode: boolean = false;
+  private bufferingPeers: Map<string, string> = new Map(); // peerId -> nickname
+
   // DOM Elements cache
   private elements: Record<string, HTMLElement | null> = {};
 
   constructor() {
-    this.nickname = generateNickname();
+    // Check for saved username or generate random
+    const savedName = getSavedUsername();
+    this.nickname = savedName || generateNickname();
+
     this.cacheElements();
     this.initializeEventListeners();
     this.initializeKeyboardShortcuts();
     this.setupFullscreenListener();
+
+    // Show name modal if no saved username
+    if (!hasSavedUsername()) {
+      this.showNameModal();
+    }
   }
 
   // ===== Initialization =====
@@ -50,6 +84,8 @@ class LocalWatchApp {
       'home-screen', 'create-room-screen', 'join-room-screen', 'player-screen',
       // Home
       'create-room-btn', 'join-room-btn',
+      // Name Modal
+      'name-modal', 'setup-name-input', 'name-validation-error', 'save-name-btn',
       // Create Room
       'create-back-btn', 'create-nickname-input', 'random-nickname-btn',
       'select-video-btn', 'video-info', 'video-name', 'video-size', 'remove-video-btn',
@@ -58,6 +94,10 @@ class LocalWatchApp {
       'participants-list', 'generate-new-signal-btn', 'new-signal-container',
       'new-host-signal', 'copy-new-signal-btn', 'new-guest-signal-input', 'connect-new-guest-btn',
       'start-watching-btn',
+      // Media Source Tabs
+      'tab-local-file', 'tab-torrent', 'panel-local-file', 'panel-torrent',
+      'magnet-link-input', 'load-magnet-btn', 'select-torrent-btn',
+      'torrent-info', 'torrent-name', 'torrent-size', 'remove-torrent-btn',
       // Join Room
       'join-back-btn', 'join-nickname-input', 'join-random-nickname-btn',
       'room-code-input', 'join-select-video-btn', 'join-video-info',
@@ -73,10 +113,21 @@ class LocalWatchApp {
       'mute-btn', 'volume-slider', 'time-display',
       'speed-btn', 'speed-display', 'speed-menu',
       'pip-btn', 'fullscreen-btn',
-      'buffering-indicator', 'buffering-text',
+      'buffering-indicator', 'buffering-text', 'buffering-user-text',
       'chat-panel', 'close-chat-btn', 'participant-count',
       'chat-messages', 'chat-input', 'send-chat-btn',
       'sync-status',
+      // Torrent Progress Indicator
+      'torrent-progress-indicator', 'torrent-progress-percent', 'torrent-progress-details',
+      'torrent-downloaded', 'torrent-speed', 'torrent-peers', 'torrent-progress-fill',
+      // Torrent File Picker Modal
+      'torrent-file-modal', 'torrent-file-backdrop', 'torrent-file-close-btn', 'torrent-file-list',
+      // Waiting for Files Modal
+      'waiting-files-modal', 'waiting-files-message', 'required-filename', 'required-filesize', 'user-status-list',
+      // Voting Modal
+      'voting-modal', 'vote-requester', 'vote-filename', 'vote-filesize', 'vote-type',
+      'vote-bar-yes', 'vote-bar-no', 'vote-count-yes', 'vote-count-no', 'vote-timer',
+      'vote-accept-btn', 'vote-reject-btn',
       // Modals
       'toast-container', 'modal', 'modal-backdrop', 'modal-title',
       'modal-body', 'modal-footer', 'modal-close-btn',
@@ -92,6 +143,15 @@ class LocalWatchApp {
     this.on('create-room-btn', 'click', () => this.showScreen('create-room'));
     this.on('join-room-btn', 'click', () => this.showScreen('join-room'));
 
+    // Name Modal
+    this.on('save-name-btn', 'click', () => this.saveNameFromModal());
+    const nameInput = this.elements['setup-name-input'] as HTMLInputElement;
+    if (nameInput) {
+      nameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') this.saveNameFromModal();
+      });
+    }
+
     // Create Room Screen
     this.on('create-back-btn', 'click', () => this.showHome());
     this.on('random-nickname-btn', 'click', () => this.generateRandomNickname('create'));
@@ -103,7 +163,35 @@ class LocalWatchApp {
     this.on('generate-new-signal-btn', 'click', () => this.generateNewSignal());
     this.on('copy-new-signal-btn', 'click', () => this.copySignal('new-host-signal'));
     this.on('connect-new-guest-btn', 'click', () => this.connectNewGuest());
-    this.on('start-watching-btn', 'click', () => this.startWatching());
+    this.on('start-watching-btn', 'click', () => this.initiateWatching());
+
+    // Media Source Tabs
+    this.on('tab-local-file', 'click', () => this.switchMediaSourceTab('local'));
+    this.on('tab-torrent', 'click', () => this.switchMediaSourceTab('torrent'));
+
+    // Torrent Input
+    this.on('load-magnet-btn', 'click', () => this.loadMagnetLink());
+    this.on('select-torrent-btn', 'click', () => this.selectTorrentFile());
+    this.on('remove-torrent-btn', 'click', () => this.removeTorrent());
+
+    // Torrent Progress Indicator hover
+    const torrentProgressMini = this.elements['torrent-progress-indicator'];
+    if (torrentProgressMini) {
+      torrentProgressMini.addEventListener('mouseenter', () => {
+        this.elements['torrent-progress-details']?.classList.remove('hidden');
+      });
+      torrentProgressMini.addEventListener('mouseleave', () => {
+        this.elements['torrent-progress-details']?.classList.add('hidden');
+      });
+    }
+
+    // Torrent File Picker Modal
+    this.on('torrent-file-close-btn', 'click', () => this.closeTorrentFileModal());
+    this.on('torrent-file-backdrop', 'click', () => this.closeTorrentFileModal());
+
+    // Voting Modal
+    this.on('vote-accept-btn', 'click', () => this.handleVote(true));
+    this.on('vote-reject-btn', 'click', () => this.handleVote(false));
 
     // Join Room Screen
     this.on('join-back-btn', 'click', () => this.showHome());
@@ -384,6 +472,10 @@ class LocalWatchApp {
       this.network = new MeshNetwork(nickname);
       this.setupNetworkCallbacks();
 
+      // Initialize MediaController
+      this.mediaController = new MediaController(this.network);
+      this.setupMediaControllerCallbacks();
+
       const { roomCode, signalData } = await this.network.createRoom();
 
       // Update UI
@@ -495,6 +587,10 @@ class LocalWatchApp {
       this.network = new MeshNetwork(nickname);
       this.setupNetworkCallbacks();
 
+      // Initialize MediaController
+      this.mediaController = new MediaController(this.network);
+      this.setupMediaControllerCallbacks();
+
       const guestSignal = await this.network.joinRoom(roomCode, hostSignal);
 
       // Show guest signal
@@ -557,6 +653,50 @@ class LocalWatchApp {
       if (isMe && this.syncManager) {
         this.showToast('You are now the sync leader', 'success');
       }
+    });
+  }
+
+  /**
+   * Setup MediaController callbacks
+   */
+  private setupMediaControllerCallbacks(): void {
+    if (!this.mediaController) return;
+
+    // When all files are ready and media can start
+    this.mediaController.onMediaReady(() => {
+      this.hideWaitingForFilesModal();
+      // Don't call startWatching() here - it will be called after coordination is complete
+    });
+
+    // When waiting for peers to upload files
+    this.mediaController.onWaitingForFiles((statuses: FileUploadStatus[]) => {
+      this.showWaitingForFilesModal(statuses);
+    });
+
+    // When a vote request is received
+    this.mediaController.onVoteRequest((request: VoteRequest) => {
+      this.showVotingModal(request);
+    });
+
+    // When vote count changes
+    this.mediaController.onVoteUpdate((yesCount: number, noCount: number, total: number) => {
+      this.updateVoteCount(yesCount, noCount, total);
+    });
+
+    // When vote is finalized
+    this.mediaController.onVoteResult((accepted: boolean) => {
+      this.hideVotingModal();
+      if (accepted) {
+        this.showToast('Media change accepted', 'success');
+        // Media will be updated via onMediaChange
+      } else {
+        this.showToast('Media change rejected', 'info');
+      }
+    });
+
+    // When media changes
+    this.mediaController.onMediaChange((oldMedia: MediaState | null, newMedia: MediaState) => {
+      this.handleMediaChange(oldMedia, newMedia);
     });
   }
 
@@ -664,10 +804,75 @@ class LocalWatchApp {
     countEl.textContent = `${count} watching`;
   }
 
+  // ===== Media Initiation and Coordination =====
+  /**
+   * Initiate watching - loads media via MediaController for coordination
+   */
+  private async initiateWatching(): Promise<void> {
+    if (!this.mediaController) {
+      this.showToast('Media controller not initialized', 'error');
+      return;
+    }
+
+    const hasTorrent = this.mediaSourceMode === 'torrent' && this.torrentMedia !== null;
+    const hasLocal = this.mediaSourceMode === 'local' && this.selectedVideo !== null;
+
+    if (!hasTorrent && !hasLocal) {
+      this.showToast('No media selected', 'error');
+      return;
+    }
+
+    try {
+      if (hasTorrent && this.torrentMedia) {
+        // Load torrent via MediaController
+        this.mediaController.loadTorrent(
+          this.torrentMedia.magnetUri,
+          this.torrentMedia.fileName || 'video',
+          this.torrentMedia.fileSize || 0,
+          this.torrentMedia.fileIndex
+        );
+        // Torrent is ready immediately, proceed to start watching
+        await this.startWatching();
+      } else if (hasLocal && this.selectedVideo) {
+        // Load local file via MediaController - this initiates coordination
+        this.mediaController.loadLocalFile(
+          this.selectedVideo.name,
+          this.selectedVideo.size
+        );
+        // Confirm that we (the current user) have uploaded this file
+        const confirmed = this.mediaController.confirmLocalFileUploaded(
+          this.selectedVideo.name,
+          this.selectedVideo.size
+        );
+        if (!confirmed) {
+          this.showToast('File verification failed', 'error');
+          return;
+        }
+        // Wait for all users to be ready - modal will be shown by MediaController callback
+        // When ready, onMediaReady callback will be triggered
+        // We need to poll or wait for all files to be ready
+        const checkReady = setInterval(() => {
+          if (this.mediaController?.areAllFilesReady()) {
+            clearInterval(checkReady);
+            this.hideWaitingForFilesModal();
+            this.startWatching();
+          }
+        }, 500);
+      }
+    } catch (error: any) {
+      console.error('Error initiating watching:', error);
+      this.showToast(`Error: ${error.message}`, 'error');
+    }
+  }
+
   // ===== Start Watching =====
   private async startWatching(): Promise<void> {
-    if (!this.selectedVideo) {
-      this.showToast('No video selected', 'error');
+    // Check if we have media source (local or torrent)
+    const hasTorrent = this.mediaSourceMode === 'torrent' && this.torrentMedia !== null;
+    const hasLocal = this.mediaSourceMode === 'local' && this.selectedVideo !== null;
+
+    if (!hasTorrent && !hasLocal) {
+      this.showToast('No media selected', 'error');
       return;
     }
 
@@ -678,23 +883,55 @@ class LocalWatchApp {
 
     try {
       this.showScreen('player');
+      this.isTorrentMode = hasTorrent;
 
       const videoPlayer = this.elements['video-player'] as HTMLVideoElement;
       if (!videoPlayer) throw new Error('Video player not found');
 
-      // Load video
-      videoPlayer.src = `file://${this.selectedVideo.path}`;
+      // Initialize sync manager first
+      this.syncManager = new SyncManager(this.network);
 
-      // Wait for metadata
-      await new Promise<void>((resolve, reject) => {
-        videoPlayer.onloadedmetadata = () => resolve();
-        videoPlayer.onerror = () => reject(new Error('Failed to load video'));
+      // Setup buffering callback with user info
+      this.syncManager.onBufferingChange((info) => {
+        this.handleBufferingInfo(info);
       });
 
-      this.videoDuration = videoPlayer.duration;
+      // Setup media source callback for when peers share torrents
+      this.syncManager.onMediaSource((source) => {
+        this.handleReceivedMediaSource(source);
+      });
 
-      // Initialize sync manager
-      this.syncManager = new SyncManager(this.network);
+      if (hasTorrent) {
+        // Torrent mode - stream from torrent
+        await this.startTorrentStream();
+
+        // Wait for video to be ready
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Timeout loading torrent stream')), 60000);
+          videoPlayer.onloadedmetadata = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          videoPlayer.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('Failed to load torrent stream'));
+          };
+        });
+
+        // Broadcast torrent to all peers
+        this.broadcastMediaSource();
+      } else {
+        // Local file mode
+        videoPlayer.src = `file://${this.selectedVideo!.path}`;
+
+        // Wait for metadata
+        await new Promise<void>((resolve, reject) => {
+          videoPlayer.onloadedmetadata = () => resolve();
+          videoPlayer.onerror = () => reject(new Error('Failed to load video'));
+        });
+      }
+
+      this.videoDuration = videoPlayer.duration;
       this.syncManager.setVideoElement(videoPlayer);
 
       // Setup video event listeners
@@ -723,9 +960,19 @@ class LocalWatchApp {
     video.addEventListener('timeupdate', () => this.updateProgress());
     video.addEventListener('play', () => this.updatePlayPauseButton(false));
     video.addEventListener('pause', () => this.updatePlayPauseButton(true));
-    video.addEventListener('waiting', () => this.showBuffering(true));
-    video.addEventListener('playing', () => this.showBuffering(false));
-    video.addEventListener('canplay', () => this.showBuffering(false));
+    video.addEventListener('waiting', () => {
+      this.showBuffering(true);
+      // Broadcast local buffering state to peers
+      this.broadcastLocalBuffering(true);
+    });
+    video.addEventListener('playing', () => {
+      this.showBuffering(false);
+      this.broadcastLocalBuffering(false);
+    });
+    video.addEventListener('canplay', () => {
+      this.showBuffering(false);
+      this.broadcastLocalBuffering(false);
+    });
     video.addEventListener('progress', () => this.updateBuffered());
     video.addEventListener('volumechange', () => this.updateVolumeUI());
   }
@@ -1125,7 +1372,7 @@ class LocalWatchApp {
   }
 
   // ===== Toast Notifications =====
-  private showToast(message: string, type: 'success' | 'error' | 'warning' = 'success'): void {
+  private showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success'): void {
     const container = this.elements['toast-container'];
     if (!container) return;
 
@@ -1172,6 +1419,556 @@ class LocalWatchApp {
 
   private hideModal(): void {
     this.elements['modal']?.classList.add('hidden');
+  }
+
+  // ===== Name Modal Methods =====
+  private showNameModal(): void {
+    const modal = this.elements['name-modal'];
+    const input = this.elements['setup-name-input'] as HTMLInputElement;
+    if (modal) {
+      modal.classList.remove('hidden');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+    }
+  }
+
+  private hideNameModal(): void {
+    this.elements['name-modal']?.classList.add('hidden');
+  }
+
+  private saveNameFromModal(): void {
+    const input = this.elements['setup-name-input'] as HTMLInputElement;
+    const errorEl = this.elements['name-validation-error'];
+
+    if (!input) return;
+
+    const name = input.value.trim();
+    const validation = validateName(name);
+
+    if (!validation.valid) {
+      if (errorEl) {
+        errorEl.textContent = validation.error || 'Invalid name';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    // Save the name
+    if (saveUsername(name)) {
+      this.nickname = name;
+      this.hideNameModal();
+      this.showToast('Name saved!', 'success');
+
+      // Update nickname inputs if they exist
+      const createInput = this.elements['create-nickname-input'] as HTMLInputElement;
+      const joinInput = this.elements['join-nickname-input'] as HTMLInputElement;
+      if (createInput) createInput.value = name;
+      if (joinInput) joinInput.value = name;
+    } else {
+      if (errorEl) {
+        errorEl.textContent = 'Failed to save name';
+        errorEl.classList.remove('hidden');
+      }
+    }
+  }
+
+  // ===== Media Source Tab Methods =====
+  private switchMediaSourceTab(mode: MediaSourceMode): void {
+    this.mediaSourceMode = mode;
+
+    // Update tab active states
+    const localTab = this.elements['tab-local-file'];
+    const torrentTab = this.elements['tab-torrent'];
+    const localPanel = this.elements['panel-local-file'];
+    const torrentPanel = this.elements['panel-torrent'];
+
+    if (mode === 'local') {
+      localTab?.classList.add('active');
+      torrentTab?.classList.remove('active');
+      localPanel?.classList.remove('hidden');
+      torrentPanel?.classList.add('hidden');
+    } else {
+      localTab?.classList.remove('active');
+      torrentTab?.classList.add('active');
+      localPanel?.classList.add('hidden');
+      torrentPanel?.classList.remove('hidden');
+    }
+  }
+
+  // ===== Torrent Methods =====
+  private initTorrentManager(): void {
+    if (this.torrentManager) return;
+
+    this.torrentManager = new TorrentManager();
+
+    // Set up callbacks
+    this.torrentManager.onProgress((progress) => {
+      this.updateTorrentProgressUI(progress);
+    });
+
+    this.torrentManager.onReady((file) => {
+      console.log('Torrent file ready:', file.name);
+      this.torrentMedia = {
+        magnetUri: this.torrentManager?.getMagnetURI() || '',
+        fileName: file.name,
+        fileSize: file.size,
+        fileIndex: file.index,
+      };
+
+      // Update UI
+      const nameEl = this.elements['torrent-name'];
+      const sizeEl = this.elements['torrent-size'];
+      const infoEl = this.elements['torrent-info'];
+
+      if (nameEl) nameEl.textContent = file.name;
+      if (sizeEl) sizeEl.textContent = formatSize(file.size);
+      if (infoEl) infoEl.classList.remove('hidden');
+
+      this.showToast('Torrent loaded: ' + file.name, 'success');
+    });
+
+    this.torrentManager.onError((error) => {
+      console.error('Torrent error:', error);
+      this.showToast('Torrent error: ' + error, 'error');
+    });
+
+    this.torrentManager.onMultiFile((files) => {
+      this.showTorrentFilePicker(files);
+    });
+  }
+
+  private async loadMagnetLink(): Promise<void> {
+    const input = this.elements['magnet-link-input'] as HTMLInputElement;
+    if (!input) return;
+
+    const magnetUri = input.value.trim();
+    if (!magnetUri) {
+      this.showToast('Please enter a magnet link', 'error');
+      return;
+    }
+
+    if (!TorrentManager.isMagnet(magnetUri)) {
+      this.showToast('Invalid magnet link format', 'error');
+      return;
+    }
+
+    this.initTorrentManager();
+    this.showToast('Loading torrent...', 'info');
+
+    try {
+      await this.torrentManager!.loadMagnet(magnetUri);
+    } catch (error) {
+      console.error('Failed to load magnet:', error);
+      this.showToast('Failed to load torrent', 'error');
+    }
+  }
+
+  private async selectTorrentFile(): Promise<void> {
+    const result = await window.electronAPI.selectTorrentFile();
+    if (!result) return;
+
+    this.initTorrentManager();
+    this.showToast('Loading torrent file...', 'info');
+
+    try {
+      // Decode base64 to buffer
+      const binaryString = atob(result.data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      await this.torrentManager!.loadTorrentFile(Buffer.from(bytes));
+    } catch (error) {
+      console.error('Failed to load torrent file:', error);
+      this.showToast('Failed to load torrent file', 'error');
+    }
+  }
+
+  private removeTorrent(): void {
+    if (this.torrentManager) {
+      this.torrentManager.cleanup();
+    }
+    this.torrentMedia = null;
+    this.elements['torrent-info']?.classList.add('hidden');
+    const magnetInput = this.elements['magnet-link-input'] as HTMLInputElement;
+    if (magnetInput) magnetInput.value = '';
+  }
+
+  private showTorrentFilePicker(files: TorrentFileInfo[]): void {
+    const modal = this.elements['torrent-file-modal'];
+    const list = this.elements['torrent-file-list'];
+
+    if (!modal || !list) return;
+
+    // Clear existing items
+    list.innerHTML = '';
+
+    // Add file items
+    files.forEach((file) => {
+      const item = document.createElement('div');
+      item.className = 'torrent-file-item';
+      item.innerHTML = `
+        <div class="file-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+            <line x1="7" y1="2" x2="7" y2="22"/>
+            <line x1="17" y1="2" x2="17" y2="22"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+          </svg>
+        </div>
+        <div class="file-details">
+          <span class="file-name">${file.name}</span>
+          <span class="file-size">${formatSize(file.size)}</span>
+        </div>
+      `;
+
+      item.addEventListener('click', () => {
+        this.selectTorrentFileByIndex(file.index);
+        this.closeTorrentFileModal();
+      });
+
+      list.appendChild(item);
+    });
+
+    modal.classList.remove('hidden');
+  }
+
+  private closeTorrentFileModal(): void {
+    this.elements['torrent-file-modal']?.classList.add('hidden');
+  }
+
+  // ===== Waiting for Files Modal =====
+  private showWaitingForFilesModal(statuses: FileUploadStatus[]): void {
+    const modal = this.elements['waiting-files-modal'];
+    if (!modal) return;
+
+    const currentMedia = this.mediaController?.getCurrentMedia();
+    if (!currentMedia) return;
+
+    // Update filename and size
+    const filenameEl = this.elements['required-filename'];
+    const filesizeEl = this.elements['required-filesize'];
+    if (filenameEl) filenameEl.textContent = currentMedia.filename || 'Unknown';
+    if (filesizeEl) filesizeEl.textContent = `Size: ${formatSize(currentMedia.fileSize || 0)}`;
+
+    // Update user status list
+    const listEl = this.elements['user-status-list'];
+    if (listEl) {
+      listEl.innerHTML = '';
+      statuses.forEach(status => {
+        const item = document.createElement('div');
+        item.className = `user-status-item ${status.hasFile ? 'has-file' : 'waiting'}`;
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'user-status-name';
+        nameEl.textContent = status.nickname;
+
+        const badge = document.createElement('span');
+        badge.className = `user-status-badge ${status.hasFile ? 'ready' : 'waiting'}`;
+        if (status.hasFile) {
+          badge.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Ready
+          `;
+        } else {
+          badge.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Waiting
+          `;
+        }
+
+        item.appendChild(nameEl);
+        item.appendChild(badge);
+        listEl.appendChild(item);
+      });
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  private hideWaitingForFilesModal(): void {
+    this.elements['waiting-files-modal']?.classList.add('hidden');
+  }
+
+  // ===== Voting Modal =====
+  private voteTimerInterval: NodeJS.Timeout | null = null;
+
+  private showVotingModal(request: VoteRequest): void {
+    const modal = this.elements['voting-modal'];
+    if (!modal) return;
+
+    // Update requester name
+    const requesterEl = this.elements['vote-requester'];
+    if (requesterEl) requesterEl.textContent = request.requestedByName;
+
+    // Update file info
+    const filenameEl = this.elements['vote-filename'];
+    const filesizeEl = this.elements['vote-filesize'];
+    const typeEl = this.elements['vote-type'];
+    if (filenameEl) filenameEl.textContent = request.filename;
+    if (filesizeEl) filesizeEl.textContent = formatSize(request.fileSize || 0);
+    if (typeEl) {
+      const badge = request.mediaType === 'torrent' ?
+        '<span class="badge badge-torrent">Torrent</span>' :
+        '<span class="badge badge-local">Local File</span>';
+      typeEl.innerHTML = badge;
+    }
+
+    // Start timer countdown
+    const startTime = request.startTime;
+    const timerEl = this.elements['vote-timer'];
+    if (timerEl && this.voteTimerInterval === null) {
+      this.voteTimerInterval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, 30 - Math.floor(elapsed / 1000));
+        timerEl.textContent = `${remaining}s`;
+        if (remaining === 0 && this.voteTimerInterval) {
+          clearInterval(this.voteTimerInterval);
+          this.voteTimerInterval = null;
+        }
+      }, 100);
+    }
+
+    // Reset vote bars
+    this.updateVoteCount(0, 0, 1);
+
+    modal.classList.remove('hidden');
+  }
+
+  private hideVotingModal(): void {
+    const modal = this.elements['voting-modal'];
+    if (modal) {
+      modal.classList.add('hidden');
+    }
+
+    // Clear timer
+    if (this.voteTimerInterval) {
+      clearInterval(this.voteTimerInterval);
+      this.voteTimerInterval = null;
+    }
+  }
+
+  private updateVoteCount(yesCount: number, noCount: number, total: number): void {
+    const yesBar = this.elements['vote-bar-yes'];
+    const noBar = this.elements['vote-bar-no'];
+    const yesCountEl = this.elements['vote-count-yes'];
+    const noCountEl = this.elements['vote-count-no'];
+
+    if (yesBar && noBar) {
+      const yesPercent = total > 0 ? (yesCount / total) * 100 : 0;
+      const noPercent = total > 0 ? (noCount / total) * 100 : 0;
+      yesBar.style.width = `${yesPercent}%`;
+      noBar.style.width = `${noPercent}%`;
+    }
+
+    if (yesCountEl) yesCountEl.textContent = yesCount.toString();
+    if (noCountEl) noCountEl.textContent = noCount.toString();
+  }
+
+  private handleVote(accept: boolean): void {
+    if (!this.mediaController) return;
+    this.mediaController.submitVote(accept);
+  }
+
+  private handleMediaChange(oldMedia: MediaState | null, newMedia: MediaState): void {
+    // Stop current video if playing
+    const videoEl = this.elements['video-player'] as HTMLVideoElement;
+    if (videoEl) {
+      videoEl.pause();
+      videoEl.src = '';
+    }
+
+    // Clear torrent if needed
+    if (this.torrentManager) {
+      this.torrentManager.cleanup();
+    }
+
+    // Load new media based on type
+    if (newMedia.type === 'torrent' && newMedia.magnetUri) {
+      this.loadTorrentFromMediaSource(newMedia);
+    } else if (newMedia.type === 'local') {
+      // Local file - will be handled by file coordination system
+      this.showToast(`Loading ${newMedia.filename}...`, 'info');
+    }
+  }
+
+  private async loadTorrentFromMediaSource(media: MediaState): Promise<void> {
+    if (!media.magnetUri || !this.torrentManager) return;
+
+    try {
+      await this.torrentManager.loadMagnet(media.magnetUri, media.fileIndex);
+      this.showToast('Torrent loaded successfully', 'success');
+    } catch (error: any) {
+      console.error('Error loading torrent from media source:', error);
+      this.showToast(`Error loading torrent: ${error.message}`, 'error');
+    }
+  }
+
+  private selectTorrentFileByIndex(index: number): void {
+    if (!this.torrentManager) return;
+
+    try {
+      this.torrentManager.selectFileByIndex(index);
+    } catch (error) {
+      console.error('Failed to select file:', error);
+      this.showToast('Failed to select file', 'error');
+    }
+  }
+
+  private updateTorrentProgressUI(progress: TorrentProgress): void {
+    const percentEl = this.elements['torrent-progress-percent'];
+    const downloadedEl = this.elements['torrent-downloaded'];
+    const speedEl = this.elements['torrent-speed'];
+    const peersEl = this.elements['torrent-peers'];
+    const fillEl = this.elements['torrent-progress-fill'];
+
+    const percent = Math.round(progress.progress * 100);
+
+    if (percentEl) percentEl.textContent = `${percent}%`;
+    if (downloadedEl) {
+      downloadedEl.textContent = `${formatSize(progress.downloaded)} / ${formatSize(progress.total)}`;
+    }
+    if (speedEl) speedEl.textContent = formatSpeed(progress.downloadSpeed);
+    if (peersEl) peersEl.textContent = progress.numPeers.toString();
+    if (fillEl) fillEl.style.width = `${percent}%`;
+  }
+
+  private showTorrentProgress(): void {
+    this.elements['torrent-progress-indicator']?.classList.remove('hidden');
+  }
+
+  private hideTorrentProgress(): void {
+    this.elements['torrent-progress-indicator']?.classList.add('hidden');
+  }
+
+  // ===== Enhanced Buffering with User Info =====
+  private handleBufferingInfo(info: BufferingInfo): void {
+    if (info.isBuffering) {
+      this.bufferingPeers.set(info.peerId, info.nickname);
+    } else {
+      this.bufferingPeers.delete(info.peerId);
+    }
+
+    this.updateBufferingUI();
+  }
+
+  private updateBufferingUI(): void {
+    const indicator = this.elements['buffering-indicator'];
+    const mainText = this.elements['buffering-text'];
+    const userText = this.elements['buffering-user-text'];
+
+    if (this.bufferingPeers.size > 0) {
+      // Show buffering indicator
+      indicator?.classList.remove('hidden');
+
+      // Build user text
+      const names = Array.from(this.bufferingPeers.values());
+      if (names.length === 1) {
+        if (mainText) mainText.textContent = 'Buffering...';
+        if (userText) {
+          userText.textContent = `Waiting for ${names[0]}`;
+          userText.classList.remove('hidden');
+        }
+      } else if (names.length > 1) {
+        if (mainText) mainText.textContent = 'Buffering...';
+        if (userText) {
+          userText.textContent = `Waiting for ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+          userText.classList.remove('hidden');
+        }
+      }
+    } else {
+      // Hide buffering indicator
+      indicator?.classList.add('hidden');
+      if (userText) userText.classList.add('hidden');
+    }
+  }
+
+  private broadcastLocalBuffering(isBuffering: boolean): void {
+    if (this.network) {
+      this.network.broadcastBuffering(isBuffering);
+    }
+  }
+
+  // ===== Torrent Streaming in Player =====
+  private async startTorrentStream(): Promise<void> {
+    if (!this.torrentManager || !this.torrentMedia) {
+      console.error('No torrent loaded');
+      return;
+    }
+
+    const videoElement = this.elements['video-player'] as HTMLVideoElement;
+    if (!videoElement) return;
+
+    this.showTorrentProgress();
+
+    try {
+      // Stream torrent to video element
+      this.torrentManager.streamTo(videoElement);
+
+      // Set up video event handlers for buffering
+      videoElement.addEventListener('waiting', () => {
+        this.broadcastLocalBuffering(true);
+      });
+
+      videoElement.addEventListener('playing', () => {
+        this.broadcastLocalBuffering(false);
+      });
+
+      videoElement.addEventListener('canplay', () => {
+        this.broadcastLocalBuffering(false);
+      });
+
+    } catch (error) {
+      console.error('Failed to start torrent stream:', error);
+      this.showToast('Failed to start stream', 'error');
+    }
+  }
+
+  // ===== Broadcast Media Source =====
+  private broadcastMediaSource(): void {
+    if (!this.network) return;
+
+    if (this.isTorrentMode && this.torrentMedia) {
+      const mediaSource: MediaSource = {
+        type: 'torrent',
+        magnetUri: this.torrentMedia.magnetUri,
+        fileIndex: this.torrentMedia.fileIndex,
+        fileName: this.torrentMedia.fileName,
+        fileSize: this.torrentMedia.fileSize,
+      };
+      this.network.broadcastMediaSource(mediaSource);
+    }
+  }
+
+  // ===== Handle Received Media Source =====
+  private async handleReceivedMediaSource(source: MediaSource): Promise<void> {
+    if (source.type === 'torrent' && source.magnetUri) {
+      console.log('Received torrent from peer:', source.magnetUri);
+      this.showToast('Loading shared torrent...', 'info');
+
+      this.initTorrentManager();
+      this.isTorrentMode = true;
+
+      try {
+        await this.torrentManager!.loadMagnet(source.magnetUri, source.fileIndex);
+
+        // If we're in the player, start streaming
+        if (this.currentScreen === 'player') {
+          await this.startTorrentStream();
+        }
+      } catch (error) {
+        console.error('Failed to load shared torrent:', error);
+        this.showToast('Failed to load shared torrent', 'error');
+      }
+    }
   }
 }
 

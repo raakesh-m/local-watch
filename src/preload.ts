@@ -5,6 +5,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('electronAPI', {
   // Video file operations
   selectVideoFile: () => ipcRenderer.invoke('select-video-file'),
+  selectTorrentFile: () => ipcRenderer.invoke('select-torrent-file'),
   validateFilePath: (filePath: string) =>
     ipcRenderer.invoke('validate-file-path', filePath),
   getVideoInfo: (filePath: string) =>
@@ -47,6 +48,11 @@ declare global {
         name: string;
         size: number;
         formattedSize: string;
+      } | null>;
+      selectTorrentFile: () => Promise<{
+        path: string;
+        name: string;
+        data: string; // base64 encoded torrent file
       } | null>;
       validateFilePath: (filePath: string) => Promise<{
         valid: boolean;

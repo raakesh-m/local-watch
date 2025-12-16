@@ -102,6 +102,40 @@ ipcMain.handle('select-video-file', async () => {
   };
 });
 
+// Select .torrent file
+ipcMain.handle('select-torrent-file', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      {
+        name: 'Torrent Files',
+        extensions: ['torrent'],
+      },
+    ],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  const filePath = result.filePaths[0];
+
+  try {
+    // Read torrent file as base64 (for transfer to renderer)
+    const fileBuffer = fs.readFileSync(filePath);
+    const base64 = fileBuffer.toString('base64');
+
+    return {
+      path: filePath,
+      name: path.basename(filePath),
+      data: base64,
+    };
+  } catch (error) {
+    console.error('Error reading torrent file:', error);
+    return null;
+  }
+});
+
 // Validate file path
 ipcMain.handle('validate-file-path', async (_event, filePath: string) => {
   try {
